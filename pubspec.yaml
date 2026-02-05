@@ -1,0 +1,54 @@
+name: autodentifyr
+description: "Automatically detect automobile damage."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+  flutter: ">=3.32.1"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  image_picker: ^0.8.7
+  path_provider: ^2.0.0
+  archive: ^3.0.0
+  http: ^1.0.0
+  ultralytics_yolo: ^0.2.0
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  fpdart: ^1.2.0
+  flutter_bloc: ^9.1.1
+  share_plus: ^12.0.1
+
+  # ultralytics_yolo:
+  #   path: ../
+
+  cupertino_icons: ^1.0.8
+  image: ^4.3.0
+
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  change_app_package_name: ^1.5.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/models/
+    - assets/app_icon.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0D263D"
+  adaptive_icon_foreground: "assets/app_icon.png"
+  remove_alpha_ios: true
