@@ -53,13 +53,22 @@ lib/
     flutter pub get
     ```
 
-3.  **Run the app**:
+3.  **Firebase Configuration**:
+    This project requires Firebase for authentication. You must provide your own configuration files:
+    - **Android**: Place `google-services.json` in `android/app/`.
+    - **iOS**: Place `GoogleService-Info.plist` in `ios/Runner/`.
+    - **Dart**: Create `lib/firebase_options.dart` (see `lib/firebase_options.example.dart` for reference).
+
+4.  **Model Setup**:
+    > **Important**: The ML models are not included in this repository. You must manually add your model(s) and rename it to `best`:
+
+    - **Android**: Place your `best.tflite` model in `android/app/src/main/assets`.
+    - **iOS**: Open `ios/Runner.xcworkspace` in Xcode, then drag and drop your `best.mlpackage` folder into the `Runner` folder.
+
+5.  **Run the app**:
     ```bash
     flutter run
     ```
-
-> **Note**: This project requires Firebase. You must provide your own `google-services.json` (Android), `GoogleService-Info.plist` (iOS), and `lib/firebase_options.dart`. See `lib/firebase_options.example.dart`.
-
 
 ## 🗺️ Roadmap & Future Work
 
