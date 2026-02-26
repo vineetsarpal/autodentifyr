@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:autodentifyr/core/theme/theme.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
@@ -11,6 +12,12 @@ import 'presentation/screens/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // google_sign_in v7: initialize the singleton once before any usage.
+  await GoogleSignIn.instance.initialize(
+    serverClientId: DefaultFirebaseOptions.googleSignInServerClientId,
+  );
+
   runApp(const MyApp());
 }
 

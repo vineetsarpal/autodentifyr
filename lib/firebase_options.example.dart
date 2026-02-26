@@ -15,6 +15,9 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 class DefaultFirebaseOptions {
+  static const String googleSignInServerClientId =
+      'YOUR-GOOGLE-SIGN-IN-SERVER-CLIENT-ID';
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       throw UnsupportedError(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
 import 'package:autodentifyr/presentation/bloc/auth/auth_bloc.dart';
+import 'package:sign_in_button/sign_in_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,6 +41,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 SnackBar(
                   content: Text(state.message),
                   backgroundColor: AppPalette.redColor,
+                ),
+              );
+            } else if (state is AuthPasswordResetEmailSent) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Password reset email sent! Check your inbox.'),
+                  backgroundColor: AppPalette.appGreen,
                 ),
               );
             }
@@ -90,16 +98,46 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Password Field
                     _buildTextField(
                       controller: _passwordController,
                       label: 'Password',
                       icon: Icons.lock_outline,
                       isPassword: true,
                     ),
-                    const SizedBox(height: 32),
 
-                    // Action Button
+                    if (!_isSignUp)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            final email = _emailController.text.trim();
+                            if (email.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please enter your email first.',
+                                  ),
+                                  backgroundColor: AppPalette.redColor,
+                                ),
+                              );
+                              return;
+                            }
+                            context.read<AuthBloc>().add(
+                              AuthPasswordResetRequested(email),
+                            );
+                          },
+                          child: Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              color: AppPalette.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+
+                    // Email/Password Action Button
                     SizedBox(
                       width: double.infinity,
                       height: 56,
@@ -125,9 +163,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppPalette.appGreen,
                           foregroundColor: AppPalette.appBlue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          // shape: RoundedRectangleBorder(
+                          //   borderRadius: BorderRadius.circular(12),
+                          // ),
+                          shape: const StadiumBorder(),
                           elevation: 8,
                         ),
                         child: state is AuthLoading
@@ -135,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: AppPalette.appBlue,
                               )
                             : Text(
-                                _isSignUp ? 'SIGN UP' : 'LOGIN',
+                                _isSignUp ? 'REGISTER' : 'LOGIN',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -155,6 +194,58 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(color: AppPalette.white70),
                       ),
                     ),
+
+                    // ── OR Divider ──
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color: AppPalette.white70,
+                            thickness: 0.5,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'OR',
+                            style: TextStyle(
+                              color: AppPalette.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color: AppPalette.white70,
+                            thickness: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Google Sign-In Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: SignInButton(
+                        Buttons.google,
+                        text: "Continue with Google",
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 16,
+                        ),
+                        onPressed: state is AuthLoading
+                            ? () {}
+                            : () {
+                                context.read<AuthBloc>().add(
+                                  AuthGoogleSignInRequested(),
+                                );
+                              },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
