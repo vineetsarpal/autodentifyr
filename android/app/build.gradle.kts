@@ -69,13 +69,14 @@ android {
             useLegacyPackaging = false
         }
     }
-
-    @Suppress("DEPRECATION")
-    aaptOptions {
-        noCompress("so")
-    }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Force 16 KB aligned versions of the image processing utilities
+    implementation("com.google.ai.edge.litert:litert-support:1.4.1")
+    implementation("androidx.camera:camera-core:1.4.2") 
 }
