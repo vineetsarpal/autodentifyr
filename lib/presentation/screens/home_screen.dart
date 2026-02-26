@@ -55,21 +55,6 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 48),
-
-                // Live Camera Mode
-                _ModeCard(
-                  icon: Icons.videocam,
-                  title: 'Live Camera',
-                  description: 'Real-time damage detection using your camera',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const CameraInferenceScreen(),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
                 // Upload Image Mode
                 _ModeCard(
                   icon: Icons.photo_library,
@@ -78,6 +63,21 @@ class HomeScreen extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => const SingleImageScreen(),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Live Camera Mode
+                _ModeCard(
+                  icon: Icons.videocam,
+                  title: 'Live Camera',
+                  showBetaTag: true,
+                  description: 'Real-time damage detection using your camera',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CameraInferenceScreen(),
                     ),
                   ),
                 ),
@@ -96,12 +96,14 @@ class _ModeCard extends StatelessWidget {
     required this.title,
     required this.description,
     required this.onTap,
+    this.showBetaTag = false,
   });
 
   final IconData icon;
   final String title;
   final String description;
   final VoidCallback onTap;
+  final bool showBetaTag;
 
   @override
   Widget build(BuildContext context) {
@@ -119,27 +121,64 @@ class _ModeCard extends StatelessWidget {
             width: 2,
           ),
         ),
-        child: Column(
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
           children: [
-            Icon(icon, size: 64, color: AppPalette.appGreen),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                color: AppPalette.whiteColor,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+            Column(
+              children: [
+                Icon(icon, size: 64, color: AppPalette.appGreen),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppPalette.whiteColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppPalette.whiteColor.withValues(alpha: 0.7),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppPalette.whiteColor.withValues(alpha: 0.7),
-                fontSize: 14,
+            if (showBetaTag)
+              Positioned(
+                top: -12,
+                right: -12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppPalette.appGreen,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    'BETA',
+                    style: TextStyle(
+                      color: AppPalette.appBlue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),
