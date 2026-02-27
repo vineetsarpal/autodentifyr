@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -16,6 +17,14 @@ void main() async {
   // google_sign_in v7: initialize the singleton once before any usage.
   await GoogleSignIn.instance.initialize(
     serverClientId: DefaultFirebaseOptions.googleSignInServerClientId,
+  );
+
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ),
   );
 
   runApp(const MyApp());
