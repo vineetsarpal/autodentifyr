@@ -116,20 +116,20 @@ class CameraInferenceController extends ChangeNotifier {
 
   /// Map of damage types to estimated repair costs
   static const Map<String, double> _damagePrices = {
-    'front-windscreen-damage': 650.0,
-    'headlight-damage': 350.0,
-    'rear-windscreen-damage': 550.0,
-    'runningboard-damage': 400.0,
-    'sidemirror-damage': 250.0,
-    'taillight-damage': 300.0,
-    'bonnet-dent': 450.0,
-    'boot-dent': 450.0,
-    'doorouter-dent': 500.0,
-    'fender-dent': 350.0,
-    'front-bumper-dent': 400.0,
-    'quaterpanel-dent': 550.0,
-    'rear-bumper-dent': 400.0,
-    'roof-dent': 750.0,
+    'front-windscreen-damage': 450.0,
+    'headlight-damage': 420.0,
+    'rear-windscreen-damage': 400.0,
+    'runningboard-damage': 500.0,
+    'sidemirror-damage': 300.0,
+    'taillight-damage': 320.0,
+    'bonnet-dent': 500.0,
+    'boot-dent': 500.0,
+    'doorouter-dent': 550.0,
+    'fender-dent': 450.0,
+    'front-bumper-dent': 600.0,
+    'quaterpanel-dent': 700.0,
+    'rear-bumper-dent': 600.0,
+    'roof-dent': 700.0,
   };
 
   void _calculatePrice(List<YOLOResult> results) {

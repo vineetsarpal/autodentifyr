@@ -13,6 +13,7 @@ import 'package:ultralytics_yolo/utils/error_handler.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
 import 'package:autodentifyr/services/model_manager.dart';
 import 'package:autodentifyr/models/models.dart';
+import 'package:autodentifyr/presentation/widgets/estimate_disclaimer_icon.dart';
 
 /// A screen for analyzing damage from uploaded images
 class SingleImageScreen extends StatefulWidget {
@@ -295,11 +296,22 @@ class _SingleImageScreenState extends State<SingleImageScreen> {
                     label: 'Detections',
                     value: detectionCount.toString(),
                   ),
-                  _buildStatItem(
-                    icon: Icons.attach_money,
-                    label: 'Estimated Cost',
-                    value: '\$${totalPrice.toStringAsFixed(0)}',
-                    valueColor: AppPalette.yellowColor,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildStatItem(
+                        icon: Icons.attach_money,
+                        label: 'Total Estimate',
+                        value: '\$${totalPrice.toStringAsFixed(0)}',
+                        valueColor: AppPalette.yellowColor,
+                      ),
+                      const SizedBox(width: 6),
+                      const EstimateDisclaimerIcon(
+                        size: 16,
+                        color: AppPalette.greyColor,
+                        tooltip: 'Estimate disclaimer',
+                      ),
+                    ],
                   ),
                 ],
               ),
