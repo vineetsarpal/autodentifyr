@@ -60,7 +60,9 @@ lib/
     - **Dart**: Create `lib/firebase_options.dart` (see `lib/firebase_options.example.dart` for reference).
 
 4.  **Model Setup**:
-    > **Important**: The ML models are not included in this repository. You must manually add your model(s) and rename it to `best`:
+    > **Important**: The ML models are not included in this repository. You can find the base fine-tuned model used in this project at [huggingface.co/vineetsarpal/yolov11n-car-damage](https://huggingface.co/vineetsarpal/yolov11n-car-damage).
+
+    To set up the app, download the model, rename it to `best`, and place it in the appropriate directory:
 
     - **Android**: Place your `best.tflite` model in `android/app/src/main/assets`.
     - **iOS**: Open `ios/Runner.xcworkspace` in Xcode, then drag and drop your `best.mlpackage` folder into the `Runner` folder.
