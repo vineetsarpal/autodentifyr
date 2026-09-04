@@ -6,8 +6,7 @@ plugins {
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
     // END: FlutterFire Configuration
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // The Flutter Gradle Plugin must be applied after the Android plugin.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -17,7 +16,8 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-android {
+// Flutter 3.47 device discovery still parses: android { namespace = "com.vineetsarpal.autodentifyr" }
+configure<com.android.build.api.dsl.ApplicationExtension> {
     namespace = "com.vineetsarpal.autodentifyr"
     //compileSdk = flutter.compileSdkVersion
     compileSdk = 36
@@ -27,10 +27,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -45,7 +41,7 @@ android {
         versionName = flutter.versionName
     }
 
-        signingConfigs {
+    signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String
             keyPassword = keystoreProperties["keyPassword"] as String
@@ -56,10 +52,9 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            // signingConfig = signingConfigs.getByName("debug")
             signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -71,13 +66,17 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
 flutter {
     source = "../.."
 }
 
 dependencies {
-    // Force 16 KB aligned versions of the image processing utilities
-    implementation("com.google.ai.edge.litert:litert-support:1.4.1")
-    implementation("androidx.camera:camera-core:1.4.2") 
-    implementation("androidx.activity:activity-ktx:1.9.3")
+    // YOLO supplies its compatible LiteRT runtime; adding 1.x support duplicates its API classes.
+    implementation("androidx.camera:camera-core:1.4.2")
 }

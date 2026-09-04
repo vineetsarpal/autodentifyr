@@ -26,53 +26,58 @@ class CameraControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned(
-          bottom: isLandscape ? 60 : 80,
-          right: isLandscape ? 8 : 16,
-          child: Column(
-            children: [
-              ControlButton(
-                content: '${currentZoomLevel.toStringAsFixed(1)}x',
-                onPressed: () => onZoomChanged(
-                  currentZoomLevel < 0.75
-                      ? 1.0
-                      : currentZoomLevel < 2.0
-                      ? 3.0
-                      : 0.5,
+    return SafeArea(
+      top: false,
+      left: false,
+      minimum: EdgeInsets.only(right: isLandscape ? 8 : 16),
+      child: Stack(
+        children: [
+          Positioned(
+            bottom: isLandscape ? 60 : 80,
+            right: 0,
+            child: Column(
+              children: [
+                ControlButton(
+                  content: '${currentZoomLevel.toStringAsFixed(1)}x',
+                  onPressed: () => onZoomChanged(
+                    currentZoomLevel < 0.75
+                        ? 1.0
+                        : currentZoomLevel < 2.0
+                        ? 3.0
+                        : 0.5,
+                  ),
                 ),
-              ),
-              SizedBox(height: isLandscape ? 8 : 12),
-              ControlButton(
-                content: Icons.adjust,
-                onPressed: () => onSliderToggled(SliderType.confidence),
-              ),
-              SizedBox(height: isLandscape ? 12 : 24),
-              CircleAvatar(
-                radius: isLandscape ? 24 : 32,
-                backgroundColor: AppPalette.whiteColor,
-                child: CircleAvatar(
-                  radius: isLandscape ? 22 : 30,
-                  backgroundColor: AppPalette.overlayBackgroundColor,
-                  child: isCapturing
-                      ? const CircularProgressIndicator(
-                          color: AppPalette.whiteColor,
-                        )
-                      : IconButton(
-                          iconSize: isLandscape ? 28 : 36,
-                          icon: const Icon(
-                            Icons.camera_alt,
+                SizedBox(height: isLandscape ? 8 : 12),
+                ControlButton(
+                  content: Icons.adjust,
+                  onPressed: () => onSliderToggled(SliderType.confidence),
+                ),
+                SizedBox(height: isLandscape ? 12 : 24),
+                CircleAvatar(
+                  radius: isLandscape ? 24 : 32,
+                  backgroundColor: AppPalette.whiteColor,
+                  child: CircleAvatar(
+                    radius: isLandscape ? 22 : 30,
+                    backgroundColor: AppPalette.overlayBackgroundColor,
+                    child: isCapturing
+                        ? const CircularProgressIndicator(
                             color: AppPalette.whiteColor,
+                          )
+                        : IconButton(
+                            iconSize: isLandscape ? 28 : 36,
+                            icon: const Icon(
+                              Icons.camera_alt,
+                              color: AppPalette.whiteColor,
+                            ),
+                            onPressed: onCapture,
                           ),
-                          onPressed: onCapture,
-                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

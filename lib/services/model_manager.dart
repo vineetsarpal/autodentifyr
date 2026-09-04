@@ -21,6 +21,9 @@ class ModelManager {
 
   static final MethodChannel _channel =
       ChannelConfig.createSingleImageChannel();
+  static const MethodChannel _androidAssetsChannel = MethodChannel(
+    'autodentifyr/model_assets',
+  );
 
   /// Callback for download progress updates (0.0 to 1.0)
   final void Function(double progress)? onDownloadProgress;
@@ -98,17 +101,13 @@ class ModelManager {
     _updateStatus('Checking for ${modelType.modelName} model...');
     final bundledName = '${modelType.modelName}.tflite';
 
-    // Check Android native assets first
-    try {
-      final result = await _channel.invokeMethod('checkModelExists', {
-        'modelPath': bundledName,
-      });
-      if (result != null && result['exists'] == true) {
-        return result['location'] == 'assets'
-            ? bundledName
-            : result['path'] as String;
-      }
-    } catch (_) {}
+    // LiteRT 2.x requires a filesystem path even when metadata can be read
+    // directly from Android assets. Refresh the copy from the installed bundle.
+    final bundledPath = await _androidAssetsChannel.invokeMethod<String>(
+      'materializeModel',
+      {'name': bundledName},
+    );
+    if (bundledPath != null) return bundledPath;
 
     // Check local storage
     final dir = await getApplicationDocumentsDirectory();

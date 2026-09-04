@@ -34,54 +34,68 @@ class HomeScreen extends StatelessWidget {
             colors: [AppPalette.appBlue, AppPalette.blackColor],
           ),
         ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                /* const Icon(
+        child: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      /* const Icon(
                   Icons.car_repair_rounded,
                   color: AppPallete.whiteColor,
                   size: 80,
                 ), */
-                Image.asset('assets/app_icon.png', width: 100, height: 100),
-                const SizedBox(height: 16),
-                Text(
-                  'Choose Detection Mode',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: AppPalette.whiteColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 48),
-                // Upload Image Mode
-                _ModeCard(
-                  icon: Icons.photo_library,
-                  title: 'Upload Image',
-                  description: 'Analyze damage by uploading an image',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const SingleImageScreen(),
-                    ),
-                  ),
-                ),
+                      Image.asset(
+                        'assets/app_icon.png',
+                        width: 100,
+                        height: 100,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Choose Detection Mode',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: AppPalette.whiteColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 48),
+                      // Upload Image Mode
+                      _ModeCard(
+                        icon: Icons.photo_library,
+                        title: 'Upload Image',
+                        description: 'Analyze damage by uploading an image',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const SingleImageScreen(),
+                          ),
+                        ),
+                      ),
 
-                const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                // Live Camera Mode
-                _ModeCard(
-                  icon: Icons.videocam,
-                  title: 'Live Camera',
-                  showBetaTag: true,
-                  description: 'Real-time damage detection using your camera',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const CameraInferenceScreen(),
-                    ),
+                      // Live Camera Mode
+                      _ModeCard(
+                        icon: Icons.videocam,
+                        title: 'Live Camera',
+                        showBetaTag: true,
+                        description:
+                            'Real-time damage detection using your camera',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CameraInferenceScreen(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),

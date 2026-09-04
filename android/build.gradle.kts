@@ -15,23 +15,6 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
-subprojects {
-    project.evaluationDependsOn(":app")
-    
-    // Force NDK version and 16KB alignment for all Android subprojects (plugins)
-    plugins.whenPluginAdded {
-        if (this is com.android.build.gradle.AppPlugin || this is com.android.build.gradle.LibraryPlugin) {
-            val android = project.extensions.getByName("android") as com.android.build.gradle.BaseExtension
-            android.ndkVersion = "28.2.13676358"
-            android.packagingOptions {
-                jniLibs {
-                    useLegacyPackaging = false
-                }
-            }
-        }
-    }
-}
-
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

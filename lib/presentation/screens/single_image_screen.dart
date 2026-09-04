@@ -61,11 +61,13 @@ class _SingleImageScreenState extends State<SingleImageScreen> {
 
   /// Initializes the YOLO model for inference
   Future<void> _initializeYOLO() async {
-    _modelPath = await _modelManager.getModelPath(ModelType.detect);
-    if (_modelPath == null) return;
-    _yolo = YOLO(modelPath: _modelPath!, task: ModelType.detect.task);
     try {
+      _modelPath = await _modelManager.getModelPath(ModelType.detect);
+      if (_modelPath == null) return;
+      _yolo = YOLO(modelPath: _modelPath!, task: ModelType.detect.task);
       await _yolo.loadModel();
+      // loadModel registers a lazy instance; compile it before enabling input.
+      await _yolo.predictorInstance();
       if (mounted) setState(() => _isModelReady = true);
     } catch (e) {
       if (mounted) {

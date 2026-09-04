@@ -172,9 +172,9 @@ class _CameraInferenceScreenState extends State<CameraInferenceScreen>
   Widget _buildCapturedImageOverlay() {
     return Container(
       color: AppPalette.overlayBackgroundColor,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 20),
+      child: SafeArea(
+        minimum: const EdgeInsets.all(16),
+        child: Center(
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,

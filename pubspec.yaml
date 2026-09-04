@@ -1,11 +1,11 @@
 name: autodentifyr
 description: "Automatically detect automobile damage."
 publish_to: "none"
-version: 1.0.2+7
+version: 1.0.3+8
 
 environment:
   sdk: ^3.8.1
-  flutter: ">=3.32.1"
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
@@ -15,14 +15,14 @@ dependencies:
   path_provider: ^2.0.0
   archive: ^3.0.0
   http: ^1.0.0
-  ultralytics_yolo: ^0.2.0
+  ultralytics_yolo: ^0.6.3
   firebase_core: ^4.4.0
   firebase_auth: ^6.1.4
   google_sign_in: ^7.2.0
-  sign_in_button: ^4.0.0
+  sign_in_button: ^5.0.0
   fpdart: ^1.2.0
   flutter_bloc: ^9.1.1
-  share_plus: ^12.0.1
+  share_plus: ^13.3.0
 
   # ultralytics_yolo:
   #   path: ../

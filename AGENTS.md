@@ -28,3 +28,17 @@ Match the existing history: write concise, imperative commit subjects such as `A
 ## Security & Local Configuration
 
 Never commit Firebase credentials or downloaded ML model binaries. Create `lib/firebase_options.dart` from `lib/firebase_options.example.dart`, place platform Firebase files in the locations documented in `README.md`, and keep local secrets out of logs and reviews.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in the Linear `AutoDentifyr` team (`ATD`); Linear is authoritative, with GitHub used for code and pull requests. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

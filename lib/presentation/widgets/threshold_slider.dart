@@ -29,37 +29,40 @@ class ThresholdSlider extends StatelessWidget {
       left: 0,
       right: 0,
       bottom: 0,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isLandscape ? 16 : 24,
-          vertical: isLandscape ? 8 : 12,
-        ),
+      child: ColoredBox(
         color: AppPalette.overlayBackgroundColor,
-        child: Row(
-          children: [
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: AppPalette.yellowColor,
-                  inactiveTrackColor: AppPalette.inactiveTrackColor,
-                  thumbColor: AppPalette.yellowColor,
-                  overlayColor: AppPalette.sliderOverlayColor,
-                ),
-                child: Slider(
-                  value: confidenceThreshold,
-                  min: 0.1,
-                  max: 0.9,
-                  divisions: 8,
-                  label: confidenceThreshold.toStringAsFixed(1),
-                  onChanged: onValueChanged,
+        child: SafeArea(
+          top: false,
+          minimum: EdgeInsets.symmetric(
+            horizontal: isLandscape ? 16 : 24,
+            vertical: isLandscape ? 8 : 12,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: AppPalette.yellowColor,
+                    inactiveTrackColor: AppPalette.inactiveTrackColor,
+                    thumbColor: AppPalette.yellowColor,
+                    overlayColor: AppPalette.sliderOverlayColor,
+                  ),
+                  child: Slider(
+                    value: confidenceThreshold,
+                    min: 0.1,
+                    max: 0.9,
+                    divisions: 8,
+                    label: confidenceThreshold.toStringAsFixed(1),
+                    onChanged: onValueChanged,
+                  ),
                 ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: AppPalette.whiteColor),
-              onPressed: onClose,
-            ),
-          ],
+              IconButton(
+                icon: const Icon(Icons.close, color: AppPalette.whiteColor),
+                onPressed: onClose,
+              ),
+            ],
+          ),
         ),
       ),
     );

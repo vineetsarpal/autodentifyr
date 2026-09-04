@@ -18,20 +18,25 @@ class CameraInferenceOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: MediaQuery.of(context).padding.top + (isLandscape ? 8 : 16),
-      left: isLandscape ? 8 : 16,
-      right: isLandscape ? 8 : 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          DetectionStatsDisplay(
-            detectionCount: controller.detectionCount,
-            currentFps: controller.currentFps,
-            totalPriceEstimate: controller.totalPriceEstimate,
-          ),
-          const SizedBox(height: 8),
-          _buildThresholdPills(),
-        ],
+      top: isLandscape ? 8 : 16,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        minimum: EdgeInsets.symmetric(horizontal: isLandscape ? 8 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            DetectionStatsDisplay(
+              detectionCount: controller.detectionCount,
+              currentFps: controller.currentFps,
+              totalPriceEstimate: controller.totalPriceEstimate,
+            ),
+            const SizedBox(height: 8),
+            _buildThresholdPills(),
+          ],
+        ),
       ),
     );
   }

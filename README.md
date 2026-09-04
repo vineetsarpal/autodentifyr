@@ -37,7 +37,8 @@ lib/
 
 ### Prerequisites
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (Stable)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.47 or newer (stable)
+- Android builds: JDK 17, Android SDK 36, and NDK 28.2.13676358
 - Physical Android or iOS device (Camera required for Live Mode)
 
 ### Installation
@@ -71,6 +72,21 @@ lib/
     ```bash
     flutter run
     ```
+
+### Android release inference check
+
+After changing Android dependencies or R8 settings, run the packaged model through
+the native inference runtime on a connected device:
+
+```bash
+flutter run --release -t tool/check_model_inference.dart -d DEVICE_ID
+```
+
+The check uses a generated image, requires no login, and displays
+`Model inference: PASS` when prediction succeeds. Run `flutter run --release`
+afterward to reinstall the normal app. Android models remain bundled in native
+assets; the app copies them to private storage because LiteRT requires an absolute
+file path.
 
 ## 🗺️ Roadmap & Future Work
 
