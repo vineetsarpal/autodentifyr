@@ -230,14 +230,16 @@ class _AssessmentFindingReviewScreenState
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox.square(
                       dimension: 96,
-                      child: Image.file(
-                        File(capture.localPath),
-                        key: Key('finding-observation-image-${observation.id}'),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const ColoredBox(
-                          color: Colors.black12,
-                          child: Icon(Icons.image_not_supported_outlined),
+                      child: _ObservationImageOverlay(
+                        capture: capture,
+                        observation: observation,
+                        imageKey: Key(
+                          'finding-observation-image-${observation.id}',
                         ),
+                        boundsKey: Key(
+                          'finding-thumbnail-bounds-${observation.id}',
+                        ),
+                        outlineColor: Theme.of(context).colorScheme.tertiary,
                       ),
                     ),
                   ),
@@ -687,51 +689,69 @@ class _ObservationEvidenceViewer extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) => InteractiveViewer(
-                minScale: 1,
-                maxScale: 8,
-                boundaryMargin: const EdgeInsets.all(80),
-                child: Center(
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    child: Stack(
-                      children: [
-                        Image.file(
-                          File(capture.localPath),
-                          key: Key('model-evidence-image-${observation.id}'),
-                          width: constraints.maxWidth,
-                          fit: BoxFit.fitWidth,
-                          errorBuilder: (_, _, _) => SizedBox(
-                            width: constraints.maxWidth,
-                            height: constraints.maxHeight * 0.6,
-                            child: const ColoredBox(
-                              color: Colors.black12,
-                              child: Center(
-                                child: Icon(
-                                  Icons.image_not_supported_outlined,
-                                  size: 64,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              key: Key(
-                                'finding-observation-bounds-${observation.id}',
-                              ),
-                              painter: _ObservationBoundsPainter(
-                                bounds: observation.bounds,
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 8,
+              boundaryMargin: const EdgeInsets.all(80),
+              child: _ObservationImageOverlay(
+                capture: capture,
+                observation: observation,
+                imageKey: Key('model-evidence-image-${observation.id}'),
+                boundsKey: Key('finding-observation-bounds-${observation.id}'),
+                outlineColor: Theme.of(context).colorScheme.tertiary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ObservationImageOverlay extends StatelessWidget {
+  const _ObservationImageOverlay({
+    required this.capture,
+    required this.observation,
+    required this.imageKey,
+    required this.boundsKey,
+    required this.outlineColor,
+  });
+
+  final Capture capture;
+  final DamageObservation observation;
+  final Key imageKey;
+  final Key boundsKey;
+  final Color outlineColor;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: Colors.black,
+    child: FittedBox(
+      fit: BoxFit.contain,
+      child: Stack(
+        children: [
+          Image.file(
+            File(capture.localPath),
+            key: imageKey,
+            errorBuilder: (_, _, _) => const SizedBox(
+              width: 4,
+              height: 3,
+              child: ColoredBox(
+                color: Colors.black12,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Icon(Icons.image_not_supported_outlined),
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                key: boundsKey,
+                painter: _ObservationBoundsPainter(
+                  bounds: observation.bounds,
+                  color: outlineColor,
                 ),
               ),
             ),

@@ -22,6 +22,14 @@ void main() {
         (firstCaptureImage.image as FileImage).file.path,
         '/evidence/capture-1.jpg',
       );
+      expect(
+        find.byKey(const Key('finding-thumbnail-bounds-observation-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('finding-thumbnail-bounds-observation-2')),
+        findsOneWidget,
+      );
       expect(find.text('Model observation: dent'), findsOneWidget);
       expect(find.text('80.0% confidence'), findsNWidgets(2));
       expect(find.text('Camera still • Capture capture-1'), findsOneWidget);
