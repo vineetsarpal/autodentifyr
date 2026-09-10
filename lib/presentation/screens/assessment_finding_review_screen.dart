@@ -217,17 +217,29 @@ class _AssessmentFindingReviewScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (capture != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox.square(
-                dimension: 96,
-                child: Image.file(
-                  File(capture.localPath),
-                  key: Key('finding-observation-image-${observation.id}'),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const ColoredBox(
-                    color: Colors.black12,
-                    child: Icon(Icons.image_not_supported_outlined),
+            Semantics(
+              button: true,
+              label: 'Enlarge model evidence for ${observation.rawClass}',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: Key('open-finding-observation-${observation.id}'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _showObservationEvidence(capture, observation),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox.square(
+                      dimension: 96,
+                      child: Image.file(
+                        File(capture.localPath),
+                        key: Key('finding-observation-image-${observation.id}'),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const ColoredBox(
+                          color: Colors.black12,
+                          child: Icon(Icons.image_not_supported_outlined),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -254,6 +266,19 @@ class _AssessmentFindingReviewScreenState
       const SizedBox(height: 8),
     ];
   }
+
+  Future<void> _showObservationEvidence(
+    Capture capture,
+    DamageObservation observation,
+  ) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => _ObservationEvidenceViewer(
+        capture: capture,
+        observation: observation,
+      ),
+    ),
+  );
 
   Capture? _captureById(IntakeAssessment assessment, String captureId) {
     for (final capture in assessment.captures) {
@@ -621,6 +646,135 @@ class _AssessmentFindingReviewScreenState
     );
     return result;
   }
+}
+
+class _ObservationEvidenceViewer extends StatelessWidget {
+  const _ObservationEvidenceViewer({
+    required this.capture,
+    required this.observation,
+  });
+
+  final Capture capture;
+  final DamageObservation observation;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      leading: CloseButton(
+        key: const Key('close-model-evidence'),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text('Model evidence'),
+    ),
+    body: SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${observation.rawClass} • '
+                  '${(observation.confidence * 100).toStringAsFixed(1)}% '
+                  'confidence',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                const Text('Pinch to zoom and drag to inspect the detection.'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => InteractiveViewer(
+                minScale: 1,
+                maxScale: 8,
+                boundaryMargin: const EdgeInsets.all(80),
+                child: Center(
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    child: Stack(
+                      children: [
+                        Image.file(
+                          File(capture.localPath),
+                          key: Key('model-evidence-image-${observation.id}'),
+                          width: constraints.maxWidth,
+                          fit: BoxFit.fitWidth,
+                          errorBuilder: (_, _, _) => SizedBox(
+                            width: constraints.maxWidth,
+                            height: constraints.maxHeight * 0.6,
+                            child: const ColoredBox(
+                              color: Colors.black12,
+                              child: Center(
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 64,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              key: Key(
+                                'finding-observation-bounds-${observation.id}',
+                              ),
+                              painter: _ObservationBoundsPainter(
+                                bounds: observation.bounds,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ObservationBoundsPainter extends CustomPainter {
+  const _ObservationBoundsPainter({required this.bounds, required this.color});
+
+  final ObservationBounds bounds;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final left = bounds.left.clamp(0.0, 1.0).toDouble();
+    final top = bounds.top.clamp(0.0, 1.0).toDouble();
+    final right = (bounds.left + bounds.width).clamp(0.0, 1.0).toDouble();
+    final bottom = (bounds.top + bounds.height).clamp(0.0, 1.0).toDouble();
+    final rectangle = Rect.fromLTRB(
+      left * size.width,
+      top * size.height,
+      right * size.width,
+      bottom * size.height,
+    );
+    final shadow = Paint()
+      ..color = Colors.black87
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6;
+    final outline = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    canvas.drawRect(rectangle, shadow);
+    canvas.drawRect(rectangle, outline);
+  }
+
+  @override
+  bool shouldRepaint(_ObservationBoundsPainter oldDelegate) =>
+      oldDelegate.bounds != bounds || oldDelegate.color != color;
 }
 
 class _Field {

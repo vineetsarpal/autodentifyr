@@ -35,6 +35,31 @@ void main() {
       );
     });
 
+    testWidgets('Appraiser enlarges a Capture with its model bounds', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('open-finding-observation-observation-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Model evidence'), findsOneWidget);
+      expect(find.text('dent • 80.0% confidence'), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(
+        find.byKey(const Key('finding-observation-bounds-observation-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('close-model-evidence')));
+      await tester.pumpAndSettle();
+      expect(find.text('Model evidence'), findsNothing);
+    });
+
     testWidgets('Appraiser confirms a Proposed Finding with required values', (
       tester,
     ) async {
