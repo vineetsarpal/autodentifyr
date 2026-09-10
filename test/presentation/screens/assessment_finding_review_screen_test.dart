@@ -7,6 +7,26 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AssessmentFindingReviewScreen', () {
+    testWidgets('Appraiser sees model evidence before reviewing a Finding', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Model observation: dent'), findsOneWidget);
+      expect(find.text('80.0% confidence'), findsNWidgets(2));
+      expect(find.text('Camera still • Capture capture-1'), findsOneWidget);
+      expect(
+        find.text('Vehicle Component: Appraiser confirmation required'),
+        findsNWidgets(2),
+      );
+      expect(
+        find.text('Damage Type: Appraiser confirmation required'),
+        findsNWidgets(2),
+      );
+    });
+
     testWidgets('Appraiser confirms a Proposed Finding with required values', (
       tester,
     ) async {
@@ -56,7 +76,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('left-front fender • crease'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('dismiss-proposed-observation-2')));
+      final dismissButton = find.byKey(
+        const Key('dismiss-proposed-observation-2'),
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pumpAndSettle();
+      await tester.tap(dismissButton);
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('reason')),

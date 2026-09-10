@@ -98,14 +98,17 @@ class _AssessmentFindingReviewScreenState
             itemCount: assessment.findings.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) =>
-                _buildFinding(assessment.findings[index]),
+                _buildFinding(assessment, assessment.findings[index]),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildFinding(DamageFinding finding) => Card(
+  Widget _buildFinding(
+    IntakeAssessment assessment,
+    DamageFinding finding,
+  ) => Card(
     child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -133,11 +136,23 @@ class _AssessmentFindingReviewScreenState
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            finding.vehicleComponent == null || finding.damageType == null
-                ? 'Component and Damage Type not yet confirmed'
-                : '${finding.vehicleComponent} • ${finding.damageType}',
-          ),
+          if (finding.reviewState == FindingReviewState.proposed) ...[
+            for (final observation in assessment.observations.where(
+              (observation) => finding.observationIds.contains(observation.id),
+            ))
+              ..._buildObservationEvidence(assessment, observation),
+            if (_hasAppraiserEdit(assessment, finding))
+              Text('${finding.vehicleComponent} • ${finding.damageType}')
+            else ...[
+              const Text('Vehicle Component: Appraiser confirmation required'),
+              const Text('Damage Type: Appraiser confirmation required'),
+            ],
+          ] else
+            Text(
+              finding.vehicleComponent == null || finding.damageType == null
+                  ? 'Component and Damage Type not yet confirmed'
+                  : '${finding.vehicleComponent} • ${finding.damageType}',
+            ),
           if (finding.hasConflictingViews) ...[
             const SizedBox(height: 4),
             const Text('Conflicting views'),
@@ -184,6 +199,40 @@ class _AssessmentFindingReviewScreenState
       ),
     ),
   );
+
+  List<Widget> _buildObservationEvidence(
+    IntakeAssessment assessment,
+    DamageObservation observation,
+  ) {
+    final capture = _captureById(assessment, observation.captureId);
+    final captureSource = switch (capture?.source) {
+      CaptureSource.camera => 'Camera still',
+      CaptureSource.import => 'Imported image',
+      null => 'Capture',
+    };
+    return [
+      Text('Model observation: ${observation.rawClass}'),
+      Text('${(observation.confidence * 100).toStringAsFixed(1)}% confidence'),
+      Text('$captureSource • Capture ${observation.captureId}'),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  Capture? _captureById(IntakeAssessment assessment, String captureId) {
+    for (final capture in assessment.captures) {
+      if (capture.id == captureId) return capture;
+    }
+    return null;
+  }
+
+  bool _hasAppraiserEdit(IntakeAssessment assessment, DamageFinding finding) =>
+      assessment.corrections.any(
+        (correction) =>
+            correction.kind == AssessmentCorrectionKind.edit &&
+            correction.replacements.any(
+              (replacement) => replacement.id == finding.id,
+            ),
+      );
 
   String _reviewLabel(DamageFinding finding) => switch (finding.reviewState) {
     FindingReviewState.proposed =>
