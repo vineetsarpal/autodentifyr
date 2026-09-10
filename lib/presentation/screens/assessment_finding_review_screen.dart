@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
@@ -211,9 +213,44 @@ class _AssessmentFindingReviewScreenState
       null => 'Capture',
     };
     return [
-      Text('Model observation: ${observation.rawClass}'),
-      Text('${(observation.confidence * 100).toStringAsFixed(1)}% confidence'),
-      Text('$captureSource • Capture ${observation.captureId}'),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (capture != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox.square(
+                dimension: 96,
+                child: Image.file(
+                  File(capture.localPath),
+                  key: Key('finding-observation-image-${observation.id}'),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const ColoredBox(
+                    color: Colors.black12,
+                    child: Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Model observation: ${observation.rawClass}'),
+                const SizedBox(height: 4),
+                Text(
+                  '${(observation.confidence * 100).toStringAsFixed(1)}% '
+                  'confidence',
+                ),
+                const SizedBox(height: 4),
+                Text('$captureSource • Capture ${observation.captureId}'),
+              ],
+            ),
+          ),
+        ],
+      ),
       const SizedBox(height: 8),
     ];
   }

@@ -14,6 +14,14 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
+      final firstCaptureImage = tester.widget<Image>(
+        find.byKey(const Key('finding-observation-image-observation-1')),
+      );
+      expect(firstCaptureImage.image, isA<FileImage>());
+      expect(
+        (firstCaptureImage.image as FileImage).file.path,
+        '/evidence/capture-1.jpg',
+      );
       expect(find.text('Model observation: dent'), findsOneWidget);
       expect(find.text('80.0% confidence'), findsNWidgets(2));
       expect(find.text('Camera still • Capture capture-1'), findsOneWidget);
