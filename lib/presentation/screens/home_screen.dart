@@ -4,6 +4,7 @@ import 'package:autodentifyr/core/theme/app_palette.dart';
 import 'package:autodentifyr/presentation/bloc/auth/auth_bloc.dart';
 import 'package:autodentifyr/presentation/screens/camera_inference_screen.dart';
 import 'package:autodentifyr/presentation/screens/single_image_screen.dart';
+import 'package:autodentifyr/presentation/controllers/assessment_workflow_composition.dart';
 
 /// Home screen that presents mode selection after login
 class HomeScreen extends StatelessWidget {
@@ -65,6 +66,21 @@ class HomeScreen extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(height: 48),
+                      _ModeCard(
+                        icon: Icons.assignment_outlined,
+                        title: 'Intake Assessments',
+                        description:
+                            'Create, resume, complete, and review device-local assessments',
+                        onTap: () async {
+                          final screen = await openAssessmentWorkflowScreen();
+                          if (!context.mounted) return;
+                          await Navigator.of(
+                            context,
+                          ).push(MaterialPageRoute(builder: (_) => screen));
+                        },
+                      ),
+
+                      const SizedBox(height: 24),
                       // Upload Image Mode
                       _ModeCard(
                         icon: Icons.photo_library,

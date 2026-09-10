@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "contract_version": 1,
+  "geography": "US",
+  "currency": "USD",
+  "hash_algorithm": "sha256",
+  "manifest_schema": "pricing_manifest.schema.json",
+  "repository_files": {
+    "source_permission_ledger": "source_permission_ledger.csv",
+    "class_operation_coverage": "class_operation_coverage.csv",
+    "placeholder_reconciliation": "placeholder_reconciliation.csv"
+  },
+  "evidence_package_files": {
+    "manifest": "pricing_manifest.json",
+    "source_records": "source_records.csv",
+    "operation_records": "operation_records.csv",
+    "coverage_matrix": "coverage_matrix.csv",
+    "review_records": "review_records.csv"
+  },
+  "repository_table_columns": {
+    "source_permission_ledger": [
+      "schema_version", "ledger_version", "source_id", "source_name", "source_route",
+      "source_version", "publisher_claim_status", "publisher_claim_evidence_uri",
+      "contractual_entitlement_status", "contractual_evidence_reference",
+      "dataset_rights_status", "record_rights_status", "derived_ranges_permission",
+      "application_display_permission", "device_local_storage_permission",
+      "offline_use_permission", "updates_permission", "retained_revisions_permission",
+      "internal_evaluation_permission", "publication_permission", "redistribution_permission",
+      "evidence_status", "coverage_eligibility", "unresolved_requirements"
+    ],
+    "class_operation_coverage": [
+      "schema_version", "mapping_version", "coverage_id", "class_id", "raw_class",
+      "component_family", "raw_longitudinal_position", "required_component_position",
+      "position_rule", "damage_type", "cohort_id", "repair_operation_options",
+      "vehicle_context", "geography", "currency", "source_id", "coverage_status",
+      "pricing_status", "missing_pricing_behavior", "unresolved_requirements"
+    ],
+    "placeholder_reconciliation": [
+      "schema_version", "reconciliation_version", "class_id", "raw_class",
+      "code_lookup_key", "live_placeholder_usd", "import_total_placeholder_usd",
+      "import_annotation_placeholder_usd", "values_match", "pricing_evidence_status",
+      "coverage_status", "required_disposition"
+    ]
+  },
+  "evidence_package_table_columns": {
+    "source_records": [
+      "source_id", "source_owner", "source_name", "source_version",
+      "collection_period_start", "collection_period_end", "geography", "currency",
+      "evidence_type", "estimate_invoice_status", "supplement_status", "parts_basis",
+      "labor_categories", "materials_basis", "inclusions", "exclusions", "refresh_date",
+      "publisher_claim_status", "contractual_entitlement_status", "dataset_rights_status",
+      "record_rights_status", "derived_ranges_permission", "application_display_permission",
+      "device_local_storage_permission", "offline_use_permission", "updates_permission",
+      "retained_revisions_permission", "internal_evaluation_permission",
+      "publication_permission", "redistribution_permission", "permission_evidence_reference"
+    ],
+    "operation_records": [
+      "pricing_record_id", "source_id", "source_version", "cohort_id",
+      "repair_operation_id", "shared_operation_group_id", "component_id", "damage_type",
+      "vehicle_context", "geography", "currency", "evidence_type",
+      "estimate_invoice_status", "supplement_status", "minimum_amount_minor",
+      "maximum_amount_minor", "pricing_status", "included_operation_ids", "exclusions",
+      "observed_at"
+    ],
+    "coverage_matrix": [
+      "coverage_id", "raw_class", "component_family", "required_component_position",
+      "damage_type", "cohort_id", "repair_operation_id", "vehicle_context", "geography",
+      "currency", "source_id", "coverage_status", "pricing_status",
+      "missing_pricing_behavior", "unresolved_reason"
+    ],
+    "review_records": [
+      "review_id", "review_type", "record_id", "reviewer_role", "reviewer_id",
+      "decision", "reviewed_at", "rationale"
+    ]
+  },
+  "evidence_statuses": ["verified", "proposed", "unavailable", "permission-required", "excluded"],
+  "coverage_statuses": ["supported", "unsupported", "unresolved"],
+  "pricing_statuses": ["verified", "proposed", "unavailable", "excluded"],
+  "permission_statuses": ["verified", "permission-required", "unavailable", "excluded"],
+  "source_routes": ["repair_shop_records", "commercial_estimating_source"],
+  "evidence_types": ["repair_shop_records", "commercial_estimating_extract", "proposed_assumption"],
+  "estimate_invoice_statuses": ["estimate", "completed_invoice", "proposed_assumption"],
+  "supplement_statuses": ["none", "pending", "partial", "final_includes_supplements", "unknown", "not_applicable"],
+  "missing_pricing_behavior": "unavailable",
+  "required_raw_classes": [
+    "Front-windscreen-damage",
+    "Headlight-damage",
+    "Rear-windscreen-Damage",
+    "Runningboard-Damage",
+    "Sidemirror-Damage",
+    "Taillight-Damage",
+    "bonnet-dent",
+    "boot-dent",
+    "doorouter-dent",
+    "fender-dent",
+    "front-bumper-dent",
+    "quaterpanel-dent",
+    "rear-bumper-dent",
+    "roof-dent"
+  ],
+  "generic_position_rules": {
+    "Headlight-damage": "lateral",
+    "Runningboard-Damage": "lateral",
+    "Sidemirror-Damage": "lateral",
+    "Taillight-Damage": "lateral",
+    "doorouter-dent": "lateral_and_longitudinal",
+    "fender-dent": "lateral_and_longitudinal",
+    "quaterpanel-dent": "lateral_and_longitudinal"
+  },
+  "completion_state": {
+    "authorized_evidence_package": false,
+    "authorized_attainable_route_selected": false,
+    "verified_rights_and_access": false,
+    "usable_scoped_sample": false,
+    "populated_supported_coverage": false,
+    "product_owner_acceptance": false,
+    "qualified_appraiser_acceptance": false,
+    "status": "unavailable"
+  },
+  "completion_evidence": [
+    "authorized_attainable_route_selected",
+    "verified_rights_and_access",
+    "usable_scoped_sample",
+    "derived_ranges_display_storage_offline_update_retention_permissions",
+    "populated_supported_coverage",
+    "real_provenance_records",
+    "product_owner_acceptance",
+    "qualified_appraiser_acceptance_or_approved_scope_revision"
+  ]
+}

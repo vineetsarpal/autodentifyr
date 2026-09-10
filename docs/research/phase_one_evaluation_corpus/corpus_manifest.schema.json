@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autodentifyr:schema:phase-one-evaluation-corpus-manifest:1",
+  "title": "AutoDentifyr Phase 1 evaluation corpus manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus_version",
+    "frozen_at",
+    "hash_algorithm",
+    "manifest_serialization",
+    "access_controlled_location",
+    "annotation_guideline_version",
+    "class_mapping_version",
+    "model_artifact_sha256",
+    "preprocessing_version",
+    "evaluator_version",
+    "operating_point_version",
+    "calibration_record_sha256",
+    "selection_frozen_at",
+    "final_test_opened_at",
+    "final_test_use",
+    "final_test_tuning_prohibited",
+    "historical_training_manifest_reconciliation",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "corpus_version": {"type": "string", "minLength": 1},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "hash_algorithm": {"const": "sha256"},
+    "manifest_serialization": {"const": "exact_utf8_bytes"},
+    "access_controlled_location": {"type": "string", "minLength": 1},
+    "annotation_guideline_version": {"type": "string", "minLength": 1},
+    "class_mapping_version": {"type": "string", "minLength": 1},
+    "model_artifact_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "preprocessing_version": {"type": "string", "minLength": 1},
+    "evaluator_version": {"type": "string", "minLength": 1},
+    "operating_point_version": {"type": "string", "minLength": 1},
+    "calibration_record_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selection_frozen_at": {"type": "string", "format": "date-time"},
+    "final_test_opened_at": {
+      "oneOf": [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"}
+      ]
+    },
+    "final_test_use": {"const": "confirmation_only"},
+    "final_test_tuning_prohibited": {"const": true},
+    "historical_training_manifest_reconciliation": {
+      "const": "unavailable_per_ATD-19"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "path", "bytes", "sha256"],
+        "properties": {
+          "role": {
+            "enum": [
+              "class_mapping",
+              "source_permissions",
+              "images",
+              "annotations",
+              "adjudications",
+              "counts",
+              "leakage_audit"
+            ]
+          },
+          "path": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

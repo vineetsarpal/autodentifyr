@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autodentifyr:schema:contextual-pricing-evidence-manifest:1",
+  "title": "AutoDentifyr contextual pricing evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "package_version", "frozen_at", "hash_algorithm", "manifest_serialization", "access_controlled_location", "coverage_contract_version", "countries", "files"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "package_version": {"type": "string", "minLength": 1},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "hash_algorithm": {"const": "sha256"},
+    "manifest_serialization": {"const": "exact_utf8_bytes"},
+    "access_controlled_location": {"type": "string", "minLength": 1},
+    "coverage_contract_version": {"type": "string", "minLength": 1},
+    "countries": {"const": {"US": "USD", "CA": "CAD"}},
+    "files": {
+      "type": "array", "minItems": 7, "maxItems": 7,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "path", "bytes", "sha256"],
+        "properties": {
+          "role": {"enum": ["source_records", "vehicle_context_records", "region_records", "contextual_operation_records", "contextual_coverage_matrix", "refresh_recalculation_records", "review_records"]},
+          "path": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}
