@@ -74,16 +74,16 @@ jobs:
         run: python -m unittest discover -s test/tools -p "test_*.py"
 
       - name: Validate Phase 1 evaluation corpus
-        run: python tool/phase_one_corpus_validator.py
+        run: python tool/phase_one_corpus_validator.py --repository-root .
 
       - name: Validate Phase 1 pricing evidence
-        run: python tool/phase_one_pricing_validator.py
+        run: python tool/phase_one_pricing_validator.py --repository-root .
 
       - name: Validate contextual pricing evidence
-        run: python tool/contextual_pricing_validator.py
+        run: python tool/contextual_pricing_validator.py --repository-root .
 
       - name: Validate severity evidence
-        run: python tool/severity_evidence_validator.py
+        run: python tool/severity_evidence_validator.py --repository-root .
 
       - name: Build Android debug APK
         run: flutter build apk --debug
