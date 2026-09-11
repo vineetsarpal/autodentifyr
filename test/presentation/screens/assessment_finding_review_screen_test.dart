@@ -14,6 +14,29 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
+      final selectionRow = find.byKey(
+        const Key('selection-row-proposed-observation-1'),
+      );
+      expect(
+        find.descendant(of: selectionRow, matching: find.byType(Checkbox)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: selectionRow, matching: find.byType(Text)),
+        findsNothing,
+      );
+      final proposedStatus = find.byKey(
+        const Key('status-proposed-observation-1'),
+      );
+      final modelObservation = find.text('Model observation: dent');
+      expect(
+        tester.getTopLeft(proposedStatus).dx,
+        tester.getTopLeft(modelObservation).dx,
+      );
+      expect(
+        tester.getTopLeft(proposedStatus).dy,
+        lessThan(tester.getTopLeft(modelObservation).dy),
+      );
       final firstCaptureImage = tester.widget<Image>(
         find.byKey(const Key('finding-observation-image-observation-1')),
       );

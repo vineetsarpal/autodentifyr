@@ -107,105 +107,114 @@ class _AssessmentFindingReviewScreenState
     );
   }
 
-  Widget _buildFinding(
-    IntakeAssessment assessment,
-    DamageFinding finding,
-  ) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Checkbox(
-                key: Key('select-${finding.id}'),
-                value: _selectedFindingIds.contains(finding.id),
-                onChanged: (selected) => setState(() {
-                  if (selected ?? false) {
-                    _selectedFindingIds.add(finding.id);
-                  } else {
-                    _selectedFindingIds.remove(finding.id);
-                  }
-                }),
-              ),
-              Expanded(
-                child: Text(
-                  _reviewLabel(finding),
-                  key: Key('status-${finding.id}'),
+  Widget _buildFinding(IntakeAssessment assessment, DamageFinding finding) {
+    final observations = assessment.observations
+        .where((observation) => finding.observationIds.contains(observation.id))
+        .toList(growable: false);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              key: Key('selection-row-${finding.id}'),
+              children: [
+                Checkbox(
+                  key: Key('select-${finding.id}'),
+                  value: _selectedFindingIds.contains(finding.id),
+                  onChanged: (selected) => setState(() {
+                    if (selected ?? false) {
+                      _selectedFindingIds.add(finding.id);
+                    } else {
+                      _selectedFindingIds.remove(finding.id);
+                    }
+                  }),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          if (finding.reviewState == FindingReviewState.proposed) ...[
-            for (final observation in assessment.observations.where(
-              (observation) => finding.observationIds.contains(observation.id),
-            ))
-              ..._buildObservationEvidence(assessment, observation),
-            if (_hasAppraiserEdit(assessment, finding))
-              Text('${finding.vehicleComponent} • ${finding.damageType}')
-            else ...[
-              const Text('Vehicle Component: Appraiser confirmation required'),
-              const Text('Damage Type: Appraiser confirmation required'),
-            ],
-          ] else
-            Text(
-              finding.vehicleComponent == null || finding.damageType == null
-                  ? 'Component and Damage Type not yet confirmed'
-                  : '${finding.vehicleComponent} • ${finding.damageType}',
+              ],
             ),
-          if (finding.hasConflictingViews) ...[
             const SizedBox(height: 4),
-            const Text('Conflicting views'),
-          ],
-          for (final request in finding.additionalViewRequests) Text(request),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton(
-                key: Key('confirm-${finding.id}'),
-                onPressed: () => _confirm(finding),
-                child: const Text('Confirm'),
-              ),
-              OutlinedButton(
-                key: Key('edit-${finding.id}'),
-                onPressed: () => _edit(finding),
-                child: const Text('Edit'),
-              ),
-              OutlinedButton(
-                key: Key('dismiss-${finding.id}'),
-                onPressed: () => _dismiss(finding),
-                child: const Text('Dismiss'),
-              ),
-              OutlinedButton(
-                key: Key('uncertainty-${finding.id}'),
-                onPressed: () => _recordUncertainty(finding),
-                child: const Text('Uncertainty'),
-              ),
-              OutlinedButton(
-                key: Key('undetermined-${finding.id}'),
-                onPressed: () => _markUndetermined(finding),
-                child: const Text('Undetermined'),
-              ),
-              OutlinedButton(
-                key: Key('split-${finding.id}'),
-                onPressed: () => _split(finding),
-                child: const Text('Split'),
+            if (finding.reviewState == FindingReviewState.proposed) ...[
+              if (observations.isEmpty)
+                Text(_reviewLabel(finding), key: Key('status-${finding.id}')),
+              for (final (index, observation) in observations.indexed)
+                ..._buildObservationEvidence(
+                  assessment,
+                  observation,
+                  statusLabel: index == 0 ? _reviewLabel(finding) : null,
+                  statusKey: index == 0 ? Key('status-${finding.id}') : null,
+                ),
+              if (_hasAppraiserEdit(assessment, finding))
+                Text('${finding.vehicleComponent} • ${finding.damageType}')
+              else ...[
+                const Text(
+                  'Vehicle Component: Appraiser confirmation required',
+                ),
+                const Text('Damage Type: Appraiser confirmation required'),
+              ],
+            ] else ...[
+              Text(_reviewLabel(finding), key: Key('status-${finding.id}')),
+              const SizedBox(height: 4),
+              Text(
+                finding.vehicleComponent == null || finding.damageType == null
+                    ? 'Component and Damage Type not yet confirmed'
+                    : '${finding.vehicleComponent} • ${finding.damageType}',
               ),
             ],
-          ),
-        ],
+            if (finding.hasConflictingViews) ...[
+              const SizedBox(height: 4),
+              const Text('Conflicting views'),
+            ],
+            for (final request in finding.additionalViewRequests) Text(request),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton(
+                  key: Key('confirm-${finding.id}'),
+                  onPressed: () => _confirm(finding),
+                  child: const Text('Confirm'),
+                ),
+                OutlinedButton(
+                  key: Key('edit-${finding.id}'),
+                  onPressed: () => _edit(finding),
+                  child: const Text('Edit'),
+                ),
+                OutlinedButton(
+                  key: Key('dismiss-${finding.id}'),
+                  onPressed: () => _dismiss(finding),
+                  child: const Text('Dismiss'),
+                ),
+                OutlinedButton(
+                  key: Key('uncertainty-${finding.id}'),
+                  onPressed: () => _recordUncertainty(finding),
+                  child: const Text('Uncertainty'),
+                ),
+                OutlinedButton(
+                  key: Key('undetermined-${finding.id}'),
+                  onPressed: () => _markUndetermined(finding),
+                  child: const Text('Undetermined'),
+                ),
+                OutlinedButton(
+                  key: Key('split-${finding.id}'),
+                  onPressed: () => _split(finding),
+                  child: const Text('Split'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   List<Widget> _buildObservationEvidence(
     IntakeAssessment assessment,
-    DamageObservation observation,
-  ) {
+    DamageObservation observation, {
+    String? statusLabel,
+    Key? statusKey,
+  }) {
     final capture = _captureById(assessment, observation.captureId);
     final captureSource = switch (capture?.source) {
       CaptureSource.camera => 'Camera still',
@@ -252,6 +261,10 @@ class _AssessmentFindingReviewScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (statusLabel != null) ...[
+                  Text(statusLabel, key: statusKey),
+                  const SizedBox(height: 4),
+                ],
                 Text('Model observation: ${observation.rawClass}'),
                 const SizedBox(height: 4),
                 Text(
