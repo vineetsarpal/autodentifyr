@@ -1,0 +1,15 @@
+schema_version,reconciliation_version,class_id,raw_class,code_lookup_key,live_placeholder_usd,import_total_placeholder_usd,import_annotation_placeholder_usd,values_match,pricing_evidence_status,coverage_status,required_disposition
+1,1,0,Front-windscreen-damage,front-windscreen-damage,450,650,650,false,excluded,unsupported,must_not_promote
+1,1,1,Headlight-damage,headlight-damage,400,350,350,false,excluded,unsupported,must_not_promote
+1,1,2,Rear-windscreen-Damage,rear-windscreen-damage,400,550,550,false,excluded,unsupported,must_not_promote
+1,1,3,Runningboard-Damage,runningboard-damage,450,400,400,false,excluded,unsupported,must_not_promote
+1,1,4,Sidemirror-Damage,sidemirror-damage,300,250,250,false,excluded,unsupported,must_not_promote
+1,1,5,Taillight-Damage,taillight-damage,300,300,300,true,excluded,unsupported,must_not_promote
+1,1,6,bonnet-dent,bonnet-dent,450,450,450,true,excluded,unsupported,must_not_promote
+1,1,7,boot-dent,boot-dent,450,450,450,true,excluded,unsupported,must_not_promote
+1,1,8,doorouter-dent,doorouter-dent,500,500,500,true,excluded,unsupported,must_not_promote
+1,1,9,fender-dent,fender-dent,400,350,350,false,excluded,unsupported,must_not_promote
+1,1,10,front-bumper-dent,front-bumper-dent,500,400,400,false,excluded,unsupported,must_not_promote
+1,1,11,quaterpanel-dent,quaterpanel-dent,600,550,550,false,excluded,unsupported,must_not_promote
+1,1,12,rear-bumper-dent,rear-bumper-dent,500,400,400,false,excluded,unsupported,must_not_promote
+1,1,13,roof-dent,roof-dent,600,750,750,false,excluded,unsupported,must_not_promote

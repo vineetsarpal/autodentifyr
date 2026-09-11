@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "contract_version": 1,
+  "phase": "phase2_contextual",
+  "hash_algorithm": "sha256",
+  "manifest_schema": "contextual_pricing_manifest.schema.json",
+  "countries": {"US": "USD", "CA": "CAD"},
+  "repository_files": {
+    "source_permission_ledger": "source_permission_ledger.csv",
+    "contextual_coverage_matrix": "contextual_coverage_matrix.csv"
+  },
+  "repository_ledger_columns": [
+    "schema_version", "ledger_version", "source_id", "source_name", "source_route",
+    "country", "currency", "regional_basis", "source_version",
+    "publisher_claim_status", "publisher_claim_evidence_uri",
+    "contractual_entitlement_status", "contractual_evidence_reference",
+    "dataset_rights_status", "record_rights_status", "derived_ranges_permission",
+    "application_display_permission", "device_local_storage_permission",
+    "offline_use_permission", "updates_permission", "retained_revisions_permission",
+    "internal_evaluation_permission", "publication_permission", "redistribution_permission",
+    "evidence_status", "coverage_eligibility", "unresolved_requirements"
+  ],
+  "evidence_package_files": {
+    "manifest": "contextual_pricing_manifest.json",
+    "source_records": "source_records.csv",
+    "vehicle_context_records": "vehicle_context_records.csv",
+    "region_records": "region_records.csv",
+    "contextual_operation_records": "contextual_operation_records.csv",
+    "contextual_coverage_matrix": "contextual_coverage_matrix.csv",
+    "refresh_recalculation_records": "refresh_recalculation_records.csv",
+    "review_records": "review_records.csv"
+  },
+  "repository_coverage_columns": [
+    "schema_version", "mapping_version", "coverage_id", "country", "currency",
+    "region_resolution", "region_basis", "vehicle_year", "vehicle_make",
+    "vehicle_model", "body_style", "equipment_status", "vehicle_context_status",
+    "vin_prefill_status", "exact_component_position", "raw_class", "damage_type",
+    "repair_operation", "labor_category", "parts_provenance", "materials_method",
+    "source_id", "source_version", "coverage_status", "pricing_status",
+    "missing_pricing_behavior", "unresolved_requirements"
+  ],
+  "evidence_package_table_columns": {
+    "source_records": [
+      "source_id", "source_owner", "source_name", "source_version", "source_route",
+      "country", "currency", "evidence_type", "estimate_invoice_status",
+      "supplement_status", "effective_start", "effective_end", "observed_at",
+      "available_at", "expires_at", "supersedes_source_version", "corrected_at",
+      "refresh_due_at", "update_cadence", "publisher_claim_status",
+      "contractual_entitlement_status", "dataset_rights_status", "record_rights_status",
+      "derived_ranges_permission", "application_display_permission",
+      "device_local_storage_permission", "offline_use_permission", "updates_permission",
+      "retained_revisions_permission", "internal_evaluation_permission",
+      "publication_permission", "redistribution_permission", "permission_evidence_reference"
+    ],
+    "vehicle_context_records": [
+      "vehicle_context_id", "context_method", "country", "model_year", "make", "model",
+      "body_style", "equipment_status", "manual_confirmation_status", "confirmed_at",
+      "vin_prefill_source_id", "vin_prefill_status", "exact_fitment_status",
+      "market_availability_status"
+    ],
+    "region_records": [
+      "region_id", "country", "currency", "region_resolution", "region_basis",
+      "rate_basis", "repair_shop_rate_status", "regional_default_status",
+      "insurer_program_schedule_status", "employee_wage_status", "source_id",
+      "source_version", "effective_date", "observed_at", "expires_at", "availability_status",
+      "inclusions", "exclusions"
+    ],
+    "contextual_operation_records": [
+      "pricing_record_id", "source_id", "source_version", "vehicle_context_id", "region_id",
+      "raw_class", "component_id", "exact_component_position", "damage_type",
+      "repair_operation_id", "shared_operation_group_id", "labor_category",
+      "operation_hours", "operation_hours_status", "parts_provenance", "parts_fitment_status",
+      "materials_method", "country", "currency", "evidence_type", "estimate_invoice_status",
+      "supplement_status", "minimum_amount_minor", "maximum_amount_minor", "pricing_status",
+      "quote_observed_at", "available_at", "expires_at", "supersedes_pricing_record_id",
+      "included_operation_ids", "tax_status", "fees_status", "freight_status",
+      "discount_status", "exclusions"
+    ],
+    "contextual_coverage_matrix": [
+      "coverage_id", "country", "currency", "region_id", "vehicle_context_id", "raw_class",
+      "exact_component_position", "damage_type", "repair_operation_id", "labor_category",
+      "parts_provenance", "materials_method", "source_id", "source_version",
+      "effective_or_observation_date", "coverage_status", "pricing_status",
+      "missing_pricing_behavior", "unresolved_reason"
+    ],
+    "refresh_recalculation_records": [
+      "refresh_id", "source_id", "prior_source_version", "new_source_version", "checked_at",
+      "refresh_outcome", "stale_status", "corrected_rate_status", "availability_change_status",
+      "draft_recalculation_status", "completed_revision_status", "currency_conversion_used",
+      "rationale"
+    ],
+    "review_records": [
+      "review_id", "review_type", "record_id", "reviewer_role", "reviewer_id",
+      "reviewer_qualification_status", "decision", "reviewed_at", "rationale"
+    ]
+  },
+  "evidence_statuses": ["verified", "proposed", "unavailable", "permission-required", "excluded"],
+  "coverage_statuses": ["supported", "unsupported", "unresolved"],
+  "pricing_statuses": ["verified", "proposed", "unavailable", "excluded"],
+  "permission_statuses": ["verified", "permission-required", "unavailable", "excluded"],
+  "region_resolutions": ["zip", "postal_code", "repair_shop", "program", "regional_default"],
+  "rate_bases": ["repair_shop", "regional_default", "insurer_program", "employee_wage", "not_applicable"],
+  "labor_categories": ["body", "paint", "frame", "structural", "mechanical", "glass", "calibration", "other", "unresolved", "not_applicable"],
+  "parts_provenance_values": ["oem", "aftermarket", "recycled", "alternate_oem", "mixed_recorded", "unresolved", "not_applicable"],
+  "materials_methods": ["recorded_line_items", "rate_times_hours", "provider_calculator", "not_applicable", "unresolved"],
+  "record_statuses": ["verified", "proposed", "unavailable", "excluded", "not_used"],
+  "availability_statuses": ["available", "unavailable", "expired", "superseded"],
+  "refresh_outcomes": ["no_change", "new_version_available", "corrected_source", "source_unavailable", "expired"],
+  "evidence_types": ["repair_shop_estimate", "completed_invoice", "supplement", "program_schedule", "commercial_estimating_extract", "proposed_assumption", "currency_conversion"],
+  "context_methods": ["manual_confirmed", "vin_prefill_confirmed", "vin_prefill_unconfirmed"],
+  "missing_pricing_behavior": "unavailable",
+  "required_raw_classes": [
+    "Front-windscreen-damage", "Headlight-damage", "Rear-windscreen-Damage",
+    "Runningboard-Damage", "Sidemirror-Damage", "Taillight-Damage", "bonnet-dent",
+    "boot-dent", "doorouter-dent", "fender-dent", "front-bumper-dent",
+    "quaterpanel-dent", "rear-bumper-dent", "roof-dent"
+  ],
+  "completion_state": {
+    "authorized_evidence_package": false,
+    "authorized_usd_and_cad_access": false,
+    "verified_contractual_dataset_record_rights": false,
+    "usable_us_and_canada_samples": false,
+    "required_product_permissions": false,
+    "populated_contextual_coverage": false,
+    "real_provenance_and_refresh_records": false,
+    "independent_appraiser_qualification": false,
+    "product_owner_acceptance": false,
+    "qualified_appraiser_acceptance": false,
+    "human_release_gate_evidence": false,
+    "approved_scope_revision": false,
+    "status": "unavailable"
+  }
+}

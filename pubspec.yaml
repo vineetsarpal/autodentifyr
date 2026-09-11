@@ -29,6 +29,7 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   image: ^4.3.0
+  pdf: ^3.11.3
 
 dev_dependencies:
   integration_test:
