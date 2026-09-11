@@ -111,7 +111,18 @@ class _AssessmentFindingReviewScreenState
     final observations = assessment.observations
         .where((observation) => finding.observationIds.contains(observation.id))
         .toList(growable: false);
+    final isSelected = _selectedFindingIds.contains(finding.id);
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
+      key: Key('finding-card-${finding.id}'),
+      color: isSelected ? colorScheme.primary.withValues(alpha: 0.18) : null,
+      elevation: isSelected ? 4 : null,
+      shape: isSelected
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: colorScheme.primary, width: 2),
+            )
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -122,7 +133,7 @@ class _AssessmentFindingReviewScreenState
               children: [
                 Checkbox(
                   key: Key('select-${finding.id}'),
-                  value: _selectedFindingIds.contains(finding.id),
+                  value: isSelected,
                   onChanged: (selected) => setState(() {
                     if (selected ?? false) {
                       _selectedFindingIds.add(finding.id);

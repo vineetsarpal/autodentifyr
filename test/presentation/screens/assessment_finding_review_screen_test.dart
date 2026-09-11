@@ -91,6 +91,29 @@ void main() {
       expect(find.text('Model evidence'), findsNothing);
     });
 
+    testWidgets('Appraiser sees which Finding is selected for merging', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      final cardFinder = find.byKey(
+        const Key('finding-card-proposed-observation-1'),
+      );
+      expect(tester.widget<Card>(cardFinder).color, isNull);
+
+      await tester.tap(find.byKey(const Key('select-proposed-observation-1')));
+      await tester.pump();
+
+      final selectedCard = tester.widget<Card>(cardFinder);
+      final colorScheme = Theme.of(tester.element(cardFinder)).colorScheme;
+      expect(selectedCard.color, colorScheme.primary.withValues(alpha: 0.18));
+      final selectedShape = selectedCard.shape! as RoundedRectangleBorder;
+      expect(selectedShape.side.color, colorScheme.primary);
+      expect(selectedShape.side.width, 2);
+    });
+
     testWidgets('Appraiser confirms a Proposed Finding with required values', (
       tester,
     ) async {
