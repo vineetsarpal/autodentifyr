@@ -72,8 +72,21 @@ class UnlinkedDamageObservation {
   final String runtimeIdentifier;
 }
 
+class EvidenceInferenceResult {
+  EvidenceInferenceResult({
+    required List<UnlinkedDamageObservation> observations,
+    required Uint8List annotatedImageBytes,
+  }) : observations = List.unmodifiable(observations),
+       annotatedImageBytes = Uint8List.fromList(
+         annotatedImageBytes,
+       ).asUnmodifiableView();
+
+  final List<UnlinkedDamageObservation> observations;
+  final Uint8List annotatedImageBytes;
+}
+
 abstract interface class EvidenceInferenceService {
-  Future<List<UnlinkedDamageObservation>> analyze(Uint8List bytes);
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes);
 }
 
 abstract interface class EvidenceFileStore {
@@ -177,15 +190,16 @@ class YoloEvidenceInferenceService implements EvidenceInferenceService {
   Future<({YOLO yolo, String modelIdentifier})>? _loadedModel;
 
   @override
-  Future<List<UnlinkedDamageObservation>> analyze(Uint8List bytes) async {
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) async {
     final loaded = await (_loadedModel ??= _loadModel());
     final result = await loaded.yolo.predict(bytes);
     final rawDetections = result['detections'] ?? result['boxes'];
     final detections = rawDetections is List
         ? MapConverter.convertMapsList(rawDetections)
         : <Map<String, dynamic>>[];
-    return List.unmodifiable(
-      detections.map((detection) {
+    return EvidenceInferenceResult(
+      annotatedImageBytes: result['annotatedImage'] as Uint8List? ?? bytes,
+      observations: detections.map((detection) {
         final normalized = detection['normalizedBox'] is Map
             ? MapConverter.convertToTypedMap(detection['normalizedBox'] as Map)
             : detection;
@@ -208,7 +222,7 @@ class YoloEvidenceInferenceService implements EvidenceInferenceService {
           modelIdentifier: loaded.modelIdentifier,
           runtimeIdentifier: runtimeIdentifier,
         );
-      }),
+      }).toList(),
     );
   }
 

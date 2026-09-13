@@ -44,6 +44,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Review evidence'), findsOneWidget);
     expect(find.text('Camera still'), findsOneWidget);
+    final reviewImage = tester.widget<Image>(
+      find.byKey(const Key('review-evidence-annotated-image')),
+    );
+    expect((reviewImage.image as MemoryImage).bytes, orderedEquals([9, 8, 7]));
 
     await tester.scrollUntilVisible(
       find.byKey(const Key('accept-evidence')),
@@ -68,6 +72,57 @@ void main() {
     expect(find.text('Imported image'), findsOneWidget);
     expect((await repository.findById('assessment-1'))!.captures, hasLength(2));
   });
+
+  testWidgets('Appraiser confirms removal of an accepted capture', (
+    tester,
+  ) async {
+    final repository = InMemoryAssessmentRepository();
+    await repository.save(
+      IntakeAssessment.create(
+        id: 'assessment-1',
+        vehicle: const Vehicle(id: 'vehicle-1'),
+        appraiserProfile: const AppraiserProfile(
+          id: 'appraiser-1',
+          displayName: 'Alex Appraiser',
+        ),
+        createdAt: DateTime.utc(2026, 9, 6, 18),
+      ),
+    );
+    final controller = AssessmentEvidenceController(
+      assessmentId: 'assessment-1',
+      repository: repository,
+      acquisitionService: _AcquisitionService(),
+      inferenceService: _InferenceService(),
+      fileStore: _FileStore(),
+      idGenerator: _IdGenerator(['capture-1', 'observation-1']).next,
+      now: () => DateTime.utc(2026, 9, 6, 18, 2),
+    );
+    await controller.load();
+    await controller.importImage();
+    await controller.accept();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AssessmentEvidenceScreen(controller: controller)),
+    );
+    await tester.tap(find.byKey(const Key('capture-menu-capture-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove capture'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove this capture?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirm-remove-capture')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 accepted Captures'), findsOneWidget);
+    expect(find.text('No accepted Captures yet.'), findsOneWidget);
+  });
+}
+
+class _IdGenerator {
+  _IdGenerator(this.values);
+
+  final List<String> values;
+
+  String next() => values.removeAt(0);
 }
 
 class _AcquisitionService implements EvidenceAcquisitionService {
@@ -86,15 +141,24 @@ class _AcquisitionService implements EvidenceAcquisitionService {
 
 class _InferenceService implements EvidenceInferenceService {
   @override
-  Future<List<UnlinkedDamageObservation>> analyze(Uint8List bytes) async => [
-    const UnlinkedDamageObservation(
-      rawClass: 'doorouter-dent',
-      confidence: 0.87,
-      bounds: ObservationBounds(left: 0.1, top: 0.2, width: 0.3, height: 0.4),
-      modelIdentifier: 'test-model',
-      runtimeIdentifier: 'test-runtime',
-    ),
-  ];
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) async =>
+      EvidenceInferenceResult(
+        annotatedImageBytes: Uint8List.fromList([9, 8, 7]),
+        observations: const [
+          UnlinkedDamageObservation(
+            rawClass: 'doorouter-dent',
+            confidence: 0.87,
+            bounds: ObservationBounds(
+              left: 0.1,
+              top: 0.2,
+              width: 0.3,
+              height: 0.4,
+            ),
+            modelIdentifier: 'test-model',
+            runtimeIdentifier: 'test-runtime',
+          ),
+        ],
+      );
 }
 
 class _FileStore implements EvidenceFileStore {

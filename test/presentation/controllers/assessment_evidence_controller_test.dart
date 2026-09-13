@@ -229,6 +229,35 @@ void main() {
       );
     });
 
+    test(
+      'removing accepted evidence deletes its file and observations',
+      () async {
+        final repository = InMemoryAssessmentRepository();
+        await repository.save(_draft());
+        final fileStore = _MemoryEvidenceFileStore();
+        final controller = AssessmentEvidenceController(
+          assessmentId: 'assessment-1',
+          repository: repository,
+          acquisitionService: _FakeAcquisitionService(),
+          inferenceService: _FakeInferenceService(),
+          fileStore: fileStore,
+          idGenerator: _IdGenerator(['capture-1', 'observation-1']).next,
+          now: () => DateTime.utc(2026, 9, 6, 18, 2),
+        );
+        await controller.load();
+        await controller.importImage();
+        await controller.accept();
+
+        await controller.removeAcceptedCapture('capture-1');
+
+        final saved = await repository.findById('assessment-1');
+        expect(controller.state.phase, AssessmentEvidencePhase.ready);
+        expect(saved!.captures, isEmpty);
+        expect(saved.observations, isEmpty);
+        expect(fileStore.deletedPaths, ['/evidence/capture-1.jpg']);
+      },
+    );
+
     test('Appraiser can retry inference before accepting evidence', () async {
       final repository = InMemoryAssessmentRepository();
       await repository.save(_draft());
@@ -338,20 +367,29 @@ class _ResultAcquisitionService implements EvidenceAcquisitionService {
 
 class _FakeInferenceService implements EvidenceInferenceService {
   @override
-  Future<List<UnlinkedDamageObservation>> analyze(Uint8List bytes) async => [
-    const UnlinkedDamageObservation(
-      rawClass: 'doorouter-dent',
-      confidence: 0.87,
-      bounds: ObservationBounds(left: 0.1, top: 0.2, width: 0.3, height: 0.4),
-      modelIdentifier: 'test-model',
-      runtimeIdentifier: 'test-runtime',
-    ),
-  ];
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) async =>
+      EvidenceInferenceResult(
+        annotatedImageBytes: Uint8List.fromList([9, 8, 7]),
+        observations: const [
+          UnlinkedDamageObservation(
+            rawClass: 'doorouter-dent',
+            confidence: 0.87,
+            bounds: ObservationBounds(
+              left: 0.1,
+              top: 0.2,
+              width: 0.3,
+              height: 0.4,
+            ),
+            modelIdentifier: 'test-model',
+            runtimeIdentifier: 'test-runtime',
+          ),
+        ],
+      );
 }
 
 class _ThrowingInferenceService implements EvidenceInferenceService {
   @override
-  Future<List<UnlinkedDamageObservation>> analyze(Uint8List bytes) async =>
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) async =>
       throw StateError('Inference unavailable');
 }
 
@@ -359,7 +397,7 @@ class _FailOnceInferenceService implements EvidenceInferenceService {
   bool _shouldFail = true;
 
   @override
-  Future<List<UnlinkedDamageObservation>> analyze(Uint8List bytes) {
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) {
     if (_shouldFail) {
       _shouldFail = false;
       throw StateError('Inference unavailable');

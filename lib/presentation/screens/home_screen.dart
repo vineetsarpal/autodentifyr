@@ -58,19 +58,23 @@ class HomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Choose Detection Mode',
+                        'What would you like to do?',
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               color: AppPalette.whiteColor,
                               fontWeight: FontWeight.bold,
                             ),
                       ),
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 40),
+                      const _SectionLabel('PROFESSIONAL WORKFLOW'),
+                      const SizedBox(height: 12),
                       _ModeCard(
                         icon: Icons.assignment_outlined,
-                        title: 'Intake Assessments',
+                        title: 'Assessment Workspace',
                         description:
-                            'Create, resume, complete, and review device-local assessments',
+                            'Create and manage documented vehicle intake assessments',
+                        supportingText: 'Saved • Reviewable • Reportable',
+                        isPrimary: true,
                         onTap: () async {
                           final screen = await openAssessmentWorkflowScreen();
                           if (!context.mounted) return;
@@ -80,34 +84,47 @@ class HomeScreen extends StatelessWidget {
                         },
                       ),
 
-                      const SizedBox(height: 24),
-                      // Upload Image Mode
-                      _ModeCard(
-                        icon: Icons.photo_library,
-                        title: 'Upload Image',
-                        description: 'Analyze damage by uploading an image',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SingleImageScreen(),
-                          ),
+                      const SizedBox(height: 32),
+                      const _SectionLabel('QUICK DETECTION'),
+                      const SizedBox(height: 12),
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _ModeCard(
+                                icon: Icons.photo_library_outlined,
+                                title: 'Analyze Photo',
+                                description:
+                                    'Check one image for visible damage',
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const SingleImageScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _ModeCard(
+                                icon: Icons.videocam_outlined,
+                                title: 'Live Detection',
+                                showBetaTag: true,
+                                description:
+                                    'Preview damage detection in real time',
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const CameraInferenceScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // Live Camera Mode
-                      _ModeCard(
-                        icon: Icons.videocam,
-                        title: 'Live Camera',
-                        showBetaTag: true,
-                        description:
-                            'Real-time damage detection using your camera',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const CameraInferenceScreen(),
-                          ),
-                        ),
-                      ),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
@@ -120,12 +137,36 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: AppPalette.whiteColor.withValues(alpha: 0.72),
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
 class _ModeCard extends StatelessWidget {
   const _ModeCard({
     required this.icon,
     required this.title,
     required this.description,
     required this.onTap,
+    this.supportingText,
+    this.isPrimary = false,
     this.showBetaTag = false,
   });
 
@@ -133,6 +174,8 @@ class _ModeCard extends StatelessWidget {
   final String title;
   final String description;
   final VoidCallback onTap;
+  final String? supportingText;
+  final bool isPrimary;
   final bool showBetaTag;
 
   @override
@@ -142,12 +185,16 @@ class _ModeCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isPrimary ? 24 : 16),
         decoration: BoxDecoration(
-          color: AppPalette.whiteColor.withValues(alpha: 0.1),
+          color: isPrimary
+              ? AppPalette.appGreen.withValues(alpha: 0.18)
+              : AppPalette.whiteColor.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: AppPalette.appGreen.withValues(alpha: 0.3),
+            color: AppPalette.appGreen.withValues(
+              alpha: isPrimary ? 0.75 : 0.28,
+            ),
             width: 2,
           ),
         ),
@@ -156,14 +203,20 @@ class _ModeCard extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 64, color: AppPalette.appGreen),
+                Icon(
+                  icon,
+                  size: isPrimary ? 56 : 40,
+                  color: AppPalette.appGreen,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   title,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: AppPalette.whiteColor,
-                    fontSize: 20,
+                    fontSize: 19,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -176,6 +229,20 @@ class _ModeCard extends StatelessWidget {
                     fontSize: 14,
                   ),
                 ),
+                if (supportingText != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    supportingText!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isPrimary
+                          ? AppPalette.appGreen
+                          : AppPalette.whiteColor.withValues(alpha: 0.58),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
             if (showBetaTag)

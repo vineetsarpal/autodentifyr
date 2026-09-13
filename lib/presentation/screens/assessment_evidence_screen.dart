@@ -82,8 +82,12 @@ class _AssessmentEvidenceScreenState extends State<AssessmentEvidenceScreen> {
                 padding: const EdgeInsets.all(16),
                 itemCount: assessment.captures.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) =>
-                    _CaptureCard(capture: assessment.captures[index]),
+                itemBuilder: (context, index) => _CaptureCard(
+                  capture: assessment.captures[index],
+                  onRemove: assessment.status == IntakeAssessmentStatus.draft
+                      ? () => _confirmRemove(assessment.captures[index])
+                      : null,
+                ),
               ),
       ),
       Padding(
@@ -112,6 +116,33 @@ class _AssessmentEvidenceScreenState extends State<AssessmentEvidenceScreen> {
       ),
     ],
   );
+
+  Future<void> _confirmRemove(Capture capture) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this capture?'),
+        content: const Text(
+          'The image and any observations or draft findings that depend on it '
+          'will be removed from this assessment.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirm-remove-capture'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.controller.removeAcceptedCapture(capture.id);
+    }
+  }
 
   Widget _buildPending(
     AssessmentEvidenceState state,
@@ -142,7 +173,8 @@ class _AssessmentEvidenceScreenState extends State<AssessmentEvidenceScreen> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Image.memory(
-              pending.evidence.bytes,
+              pending.annotatedImageBytes,
+              key: const Key('review-evidence-annotated-image'),
               fit: BoxFit.contain,
               errorBuilder: (_, _, _) => const ColoredBox(
                 color: Colors.black12,
@@ -209,9 +241,10 @@ class _AssessmentEvidenceScreenState extends State<AssessmentEvidenceScreen> {
 }
 
 class _CaptureCard extends StatelessWidget {
-  const _CaptureCard({required this.capture});
+  const _CaptureCard({required this.capture, this.onRemove});
 
   final Capture capture;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -232,6 +265,23 @@ class _CaptureCard extends StatelessWidget {
       subtitle: Text(
         '${capture.orientation.name} • ${capture.capturedAt.toLocal()}',
       ),
+      trailing: onRemove == null
+          ? null
+          : PopupMenuButton<String>(
+              key: Key('capture-menu-${capture.id}'),
+              tooltip: 'Capture actions',
+              onSelected: (_) => onRemove!(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'remove',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('Remove capture'),
+                  ),
+                ),
+              ],
+            ),
     ),
   );
 }

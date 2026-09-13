@@ -22,11 +22,13 @@ class PendingAssessmentEvidence {
     required this.captureId,
     required this.evidence,
     required this.observations,
+    required this.annotatedImageBytes,
   });
 
   final String captureId;
   final AcquiredEvidence evidence;
   final List<DamageObservation> observations;
+  final Uint8List annotatedImageBytes;
 
   CaptureSource get source => evidence.source;
 }
@@ -149,12 +151,11 @@ class AssessmentEvidenceController extends ChangeNotifier {
     }
 
     final captureId = _idGenerator();
+    late final EvidenceInferenceResult analysis;
     late final List<DamageObservation> observations;
     try {
-      final unlinked = await _inferenceService.analyze(
-        acquisition.evidence.bytes,
-      );
-      observations = _linkObservations(captureId, unlinked);
+      analysis = await _inferenceService.analyze(acquisition.evidence.bytes);
+      observations = _linkObservations(captureId, analysis.observations);
     } catch (error) {
       _emit(
         AssessmentEvidenceState(
@@ -164,6 +165,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
             captureId: captureId,
             evidence: acquisition.evidence,
             observations: const [],
+            annotatedImageBytes: acquisition.evidence.bytes,
           ),
           message: error.toString(),
         ),
@@ -178,6 +180,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
           captureId: captureId,
           evidence: acquisition.evidence,
           observations: observations,
+          annotatedImageBytes: analysis.annotatedImageBytes,
         ),
       ),
     );
@@ -282,6 +285,56 @@ class AssessmentEvidenceController extends ChangeNotifier {
 
   Future<void> retrySave() => accept();
 
+  Future<void> removeAcceptedCapture(String captureId) async {
+    final assessment = _state.assessment;
+    if (assessment == null ||
+        assessment.status != IntakeAssessmentStatus.draft) {
+      return;
+    }
+    final capture = assessment.captures
+        .where((value) => value.id == captureId)
+        .firstOrNull;
+    if (capture == null) return;
+    _emit(
+      AssessmentEvidenceState(
+        phase: AssessmentEvidencePhase.saving,
+        assessment: assessment,
+      ),
+    );
+    try {
+      final updated = assessment.removeCapture(captureId, at: _now());
+      final result = await _repository.save(
+        updated,
+        expectedUpdatedAt: assessment.updatedAt,
+      );
+      if (result is AssessmentSaveFailed) {
+        _emit(
+          AssessmentEvidenceState(
+            phase: AssessmentEvidencePhase.saveFailed,
+            assessment: assessment,
+            message: result.message,
+          ),
+        );
+        return;
+      }
+      await _deleteBestEffort(capture.localPath);
+      _emit(
+        AssessmentEvidenceState(
+          phase: AssessmentEvidencePhase.ready,
+          assessment: updated,
+        ),
+      );
+    } catch (error) {
+      _emit(
+        AssessmentEvidenceState(
+          phase: AssessmentEvidencePhase.saveFailed,
+          assessment: assessment,
+          message: error.toString(),
+        ),
+      );
+    }
+  }
+
   Future<void> _deleteBestEffort(String localPath) async {
     try {
       await _fileStore.delete(localPath);
@@ -302,7 +355,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
       ),
     );
     try {
-      final unlinked = await _inferenceService.analyze(pending.evidence.bytes);
+      final analysis = await _inferenceService.analyze(pending.evidence.bytes);
       _emit(
         AssessmentEvidenceState(
           phase: AssessmentEvidencePhase.staged,
@@ -310,7 +363,11 @@ class AssessmentEvidenceController extends ChangeNotifier {
           pendingEvidence: PendingAssessmentEvidence(
             captureId: pending.captureId,
             evidence: pending.evidence,
-            observations: _linkObservations(pending.captureId, unlinked),
+            observations: _linkObservations(
+              pending.captureId,
+              analysis.observations,
+            ),
+            annotatedImageBytes: analysis.annotatedImageBytes,
           ),
         ),
       );

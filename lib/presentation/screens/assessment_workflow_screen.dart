@@ -40,7 +40,7 @@ class _AssessmentWorkflowScreenState extends State<AssessmentWorkflowScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Intake Assessments')),
+    appBar: AppBar(title: const Text('Assessment Workspace')),
     floatingActionButton: FloatingActionButton.extended(
       key: const Key('new-assessment'),
       onPressed: () => _startAssessment(),
@@ -247,7 +247,7 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Assessment workspace')),
+    appBar: AppBar(title: const Text('Assessment Workspace')),
     body: SafeArea(
       child: ListenableBuilder(
         listenable: controller,

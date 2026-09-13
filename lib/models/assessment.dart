@@ -1545,6 +1545,57 @@ class IntakeAssessment {
     );
   }
 
+  IntakeAssessment removeCapture(String captureId, {required DateTime at}) {
+    _requireDraft('Captures can only be removed from a Draft assessment.');
+    if (!captures.any((capture) => capture.id == captureId)) {
+      throw AssessmentInvariantViolation(
+        'Capture $captureId does not belong to this assessment.',
+      );
+    }
+    final removedObservationIds = observations
+        .where((observation) => observation.captureId == captureId)
+        .map((observation) => observation.id)
+        .toSet();
+    final removedFindingIds = findings
+        .where(
+          (finding) =>
+              finding.supportingCaptureIds.contains(captureId) ||
+              finding.observationIds.any(removedObservationIds.contains),
+        )
+        .map((finding) => finding.id)
+        .toSet();
+    final estimateDependsOnRemovedFinding =
+        estimate?.operations.any(
+          (operation) => operation.findingIds.any(removedFindingIds.contains),
+        ) ??
+        false;
+
+    return _copyWith(
+      updatedAt: at.toUtc(),
+      captures: captures.where((capture) => capture.id != captureId).toList(),
+      observations: observations
+          .where((observation) => observation.captureId != captureId)
+          .toList(),
+      findings: findings
+          .where((finding) => !removedFindingIds.contains(finding.id))
+          .toList(),
+      corrections: corrections
+          .where(
+            (correction) =>
+                [...correction.originals, ...correction.replacements].every(
+                  (finding) =>
+                      !finding.supportingCaptureIds.contains(captureId),
+                ),
+          )
+          .toList(),
+      severityAssessments: severityAssessments
+          .where((severity) => !removedFindingIds.contains(severity.findingId))
+          .toList(),
+      estimate: estimateDependsOnRemovedFinding ? null : estimate,
+      replaceEstimate: estimateDependsOnRemovedFinding,
+    );
+  }
+
   IntakeAssessment recordObservation(DamageObservation observation) {
     _requireDraft(
       'Damage Observations can only be recorded in a Draft assessment.',
