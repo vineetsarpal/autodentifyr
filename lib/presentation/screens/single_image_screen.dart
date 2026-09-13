@@ -197,7 +197,7 @@ class _SingleImageScreenState extends State<SingleImageScreen> {
     return Scaffold(
       backgroundColor: AppPalette.blackColor,
       appBar: AppBar(
-        title: const Text('Upload Image'),
+        title: const Text('Analyze Photo'),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
