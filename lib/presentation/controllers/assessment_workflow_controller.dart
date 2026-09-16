@@ -23,6 +23,17 @@ class AssessmentWorkflowState {
     }
     return List.unmodifiable(byId.values);
   }
+
+  List<AppraiserProfile> get appraiserProfiles {
+    final byId = <String, AppraiserProfile>{};
+    for (final assessment in assessments) {
+      byId.putIfAbsent(
+        assessment.appraiserProfile.id,
+        () => assessment.appraiserProfile,
+      );
+    }
+    return List.unmodifiable(byId.values);
+  }
 }
 
 class AssessmentWorkflowController extends ChangeNotifier {
@@ -41,6 +52,10 @@ class AssessmentWorkflowController extends ChangeNotifier {
   AssessmentWorkflowState _state = const AssessmentWorkflowState();
 
   AssessmentWorkflowState get state => _state;
+
+  String generateVehicleId() => 'vehicle-${_idGenerator()}';
+
+  String generateAppraiserProfileId() => 'appraiser-${_idGenerator()}';
 
   Future<void> load() async {
     _emit(
@@ -67,7 +82,7 @@ class AssessmentWorkflowController extends ChangeNotifier {
     }
   }
 
-  Future<void> startAssessment({
+  Future<String?> startAssessment({
     required Vehicle vehicle,
     required AppraiserProfile appraiserProfile,
   }) async {
@@ -89,7 +104,16 @@ class AssessmentWorkflowController extends ChangeNotifier {
       if (result is AssessmentSaveFailed) {
         throw AssessmentInvariantViolation(result.message);
       }
-      await load();
+      _emit(
+        AssessmentWorkflowState(
+          phase: AssessmentWorkflowPhase.ready,
+          assessments: [
+            assessment,
+            ..._state.assessments.where((value) => value.id != assessment.id),
+          ],
+        ),
+      );
+      return assessment.id;
     } catch (error) {
       _emit(
         AssessmentWorkflowState(
@@ -100,6 +124,7 @@ class AssessmentWorkflowController extends ChangeNotifier {
               : error.toString(),
         ),
       );
+      return null;
     }
   }
 

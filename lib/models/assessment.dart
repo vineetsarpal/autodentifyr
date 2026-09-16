@@ -16,22 +16,30 @@ class AssessmentInvariantViolation implements Exception {
 }
 
 class Vehicle {
-  const Vehicle({required this.id, this.vin, this.licencePlate});
+  const Vehicle({
+    required this.id,
+    this.vin,
+    this.licencePlate,
+    this.displayLabel,
+  });
 
   final String id;
   final String? vin;
   final String? licencePlate;
+  final String? displayLabel;
 
   Map<String, Object?> toJson() => {
     'id': id,
     'vin': vin,
     'licencePlate': licencePlate,
+    'displayLabel': displayLabel,
   };
 
   factory Vehicle.fromJson(Map<String, Object?> json) => Vehicle(
     id: json['id']! as String,
     vin: json['vin'] as String?,
     licencePlate: json['licencePlate'] as String?,
+    displayLabel: json['displayLabel'] as String?,
   );
 
   @override
@@ -39,10 +47,11 @@ class Vehicle {
       other is Vehicle &&
       other.id == id &&
       other.vin == vin &&
-      other.licencePlate == licencePlate;
+      other.licencePlate == licencePlate &&
+      other.displayLabel == displayLabel;
 
   @override
-  int get hashCode => Object.hash(id, vin, licencePlate);
+  int get hashCode => Object.hash(id, vin, licencePlate, displayLabel);
 }
 
 class AppraiserProfile {

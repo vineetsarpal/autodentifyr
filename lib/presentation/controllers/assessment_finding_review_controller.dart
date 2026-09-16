@@ -278,6 +278,14 @@ class AssessmentFindingReviewController extends ChangeNotifier {
           message: error.message,
         ),
       );
+    } catch (error) {
+      _emit(
+        FindingReviewControllerState(
+          phase: FindingReviewPhase.saveFailed,
+          assessment: assessment,
+          message: error.toString(),
+        ),
+      );
     }
   }
 

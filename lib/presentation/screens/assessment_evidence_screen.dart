@@ -2,12 +2,18 @@ import 'dart:io';
 
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_evidence_controller.dart';
+import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 import 'package:flutter/material.dart';
 
 class AssessmentEvidenceScreen extends StatefulWidget {
-  const AssessmentEvidenceScreen({super.key, required this.controller});
+  const AssessmentEvidenceScreen({
+    super.key,
+    required this.controller,
+    this.onContinue,
+  });
 
   final AssessmentEvidenceController controller;
+  final VoidCallback? onContinue;
 
   @override
   State<AssessmentEvidenceScreen> createState() =>
@@ -26,6 +32,30 @@ class _AssessmentEvidenceScreenState extends State<AssessmentEvidenceScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Assessment evidence')),
+    bottomNavigationBar: widget.onContinue == null
+        ? null
+        : SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  final state = widget.controller.state;
+                  return FilledButton(
+                    key: const Key('continue-assessment'),
+                    onPressed:
+                        state.phase == AssessmentEvidencePhase.ready &&
+                            state.pendingEvidence == null
+                        ? widget.onContinue
+                        : null,
+                    child: state.phase == AssessmentEvidencePhase.saving
+                        ? const Text('Saving to device...')
+                        : const Text('Continue to findings'),
+                  );
+                },
+              ),
+            ),
+          ),
     body: SafeArea(
       child: ListenableBuilder(
         listenable: widget.controller,
@@ -263,7 +293,7 @@ class _CaptureCard extends StatelessWidget {
             : 'Imported image',
       ),
       subtitle: Text(
-        '${capture.orientation.name} • ${capture.capturedAt.toLocal()}',
+        '${capture.orientation.name} • ${formatAssessmentDateTime(context, capture.capturedAt)}',
       ),
       trailing: onRemove == null
           ? null

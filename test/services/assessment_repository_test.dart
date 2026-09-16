@@ -7,6 +7,48 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AssessmentRepository', () {
+    test(
+      'reopens generated Vehicle and declared Appraiser identities without changing snapshots',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'autodentifyr-selectors-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final first = IntakeAssessment.create(
+          id: 'assessment-a',
+          vehicle: const Vehicle(
+            id: 'vehicle-generated-a',
+            displayLabel: 'Blue hatchback',
+            licencePlate: 'ABC123',
+          ),
+          appraiserProfile: const AppraiserProfile(
+            id: 'appraiser-generated-a',
+            displayName: 'Alex Appraiser',
+          ),
+          createdAt: DateTime.utc(2026, 9, 15),
+        );
+        final second = IntakeAssessment.create(
+          id: 'assessment-b',
+          vehicle: first.vehicle,
+          appraiserProfile: first.appraiserProfile,
+          createdAt: DateTime.utc(2026, 9, 15, 1),
+        );
+        final repository = FileAssessmentRepository(directory: directory);
+        expect(await repository.save(first), isA<AssessmentSaved>());
+        expect(await repository.save(second), isA<AssessmentSaved>());
+        final reopened = FileAssessmentRepository(directory: directory);
+        final records = await reopened.list();
+        expect(records.length, 2);
+        expect(records.map((record) => record.vehicle.id).toSet(), {
+          'vehicle-generated-a',
+        });
+        expect(records.map((record) => record.appraiserProfile.id).toSet(), {
+          'appraiser-generated-a',
+        });
+        expect(records.first.vehicle.displayLabel, 'Blue hatchback');
+        expect(await reopened.findById(first.id), first);
+      },
+    );
     test('saves a Draft and reloads it after the repository reopens', () async {
       final directory = await Directory.systemTemp.createTemp(
         'autodentifyr-assessment-repository-',

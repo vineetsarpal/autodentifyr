@@ -1,10 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_workflow_controller.dart';
+import 'package:autodentifyr/presentation/controllers/assessment_progress.dart';
 
 typedef AssessmentStageOpener =
     Future<void> Function(BuildContext context, String assessmentId);
+typedef GuidedAssessmentStageOpener =
+    Future<bool?> Function(
+      BuildContext context,
+      String assessmentId,
+      AssessmentStage stage,
+    );
+
+String _vehicleLabel(Vehicle vehicle) {
+  final label = vehicle.displayLabel?.trim();
+  if (label != null && label.isNotEmpty) return label;
+  final plate = vehicle.licencePlate?.trim();
+  if (plate != null && plate.isNotEmpty) return 'Plate $plate';
+  final vin = vehicle.vin?.trim();
+  if (vin != null && vin.isNotEmpty) return 'VIN $vin';
+  if (!vehicle.id.startsWith('vehicle-')) return vehicle.id;
+  final generatedPart = vehicle.id.substring('vehicle-'.length);
+  final shortId = generatedPart.length > 8
+      ? generatedPart.substring(generatedPart.length - 8)
+      : generatedPart;
+  return 'Vehicle $shortId';
+}
 
 class AssessmentWorkflowScreen extends StatefulWidget {
   const AssessmentWorkflowScreen({
@@ -15,6 +38,7 @@ class AssessmentWorkflowScreen extends StatefulWidget {
     required this.openEstimate,
     required this.openSeverity,
     required this.openCompletion,
+    this.openGuidedStage,
   });
 
   final AssessmentWorkflowController controller;
@@ -23,6 +47,7 @@ class AssessmentWorkflowScreen extends StatefulWidget {
   final AssessmentStageOpener openEstimate;
   final AssessmentStageOpener openSeverity;
   final AssessmentStageOpener openCompletion;
+  final GuidedAssessmentStageOpener? openGuidedStage;
 
   @override
   State<AssessmentWorkflowScreen> createState() =>
@@ -91,29 +116,14 @@ class _AssessmentWorkflowScreenState extends State<AssessmentWorkflowScreen> {
               Card(
                 child: ListTile(
                   key: Key('assessment-${assessment.id}'),
-                  title: Text(assessment.vehicle.id),
+                  title: Text(_vehicleLabel(assessment.vehicle)),
                   subtitle: Text(
                     '${_statusName(assessment.status)} • ${assessment.appraiserProfile.displayName}\n'
-                    'Updated ${assessment.updatedAt.toLocal()}',
+                    'Updated ${formatAssessmentDateTime(context, assessment.updatedAt)}',
                   ),
                   isThreeLine: true,
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context)
-                      .push<void>(
-                        MaterialPageRoute(
-                          builder: (context) => _AssessmentWorkspaceScreen(
-                            assessmentId: assessment.id,
-                            controller: widget.controller,
-                            openEvidence: widget.openEvidence,
-                            openFindings: widget.openFindings,
-                            openEstimate: widget.openEstimate,
-                            openSeverity: widget.openSeverity,
-                            openCompletion: widget.openCompletion,
-                            startAnother: _startAssessment,
-                          ),
-                        ),
-                      )
-                      .then((_) => widget.controller.load()),
+                  onTap: () => _openWorkspace(assessment.id),
                 ),
               ),
           ],
@@ -122,85 +132,282 @@ class _AssessmentWorkflowScreenState extends State<AssessmentWorkflowScreen> {
     );
   }
 
-  Future<void> _startAssessment([Vehicle? existingVehicle]) async {
-    var vehicleId = existingVehicle?.id ?? '';
-    var vin = existingVehicle?.vin ?? '';
-    var licencePlate = existingVehicle?.licencePlate ?? '';
-    var appraiserId = '';
-    var appraiserName = '';
-    final submitted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          existingVehicle == null
-              ? 'New Intake Assessment'
-              : 'Another Intake Assessment',
+  Future<void> _openWorkspace(String assessmentId) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => _AssessmentWorkspaceScreen(
+          assessmentId: assessmentId,
+          controller: widget.controller,
+          openEvidence: widget.openEvidence,
+          openFindings: widget.openFindings,
+          openEstimate: widget.openEstimate,
+          openSeverity: widget.openSeverity,
+          openCompletion: widget.openCompletion,
+          openGuidedStage: widget.openGuidedStage,
+          startAnother: _startAssessment,
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _field(
-                initialValue: vehicleId,
-                label: 'Vehicle ID',
-                key: 'vehicle-id',
-                onChanged: (value) => vehicleId = value,
+      ),
+    );
+    await widget.controller.load();
+  }
+
+  Future<void> _startAssessment([Vehicle? existingVehicle]) async {
+    final vehicles = widget.controller.state.vehicles;
+    final profiles = widget.controller.state.appraiserProfiles;
+    Vehicle? selectedVehicle = existingVehicle == null
+        ? null
+        : vehicles
+              .where((vehicle) => vehicle.id == existingVehicle.id)
+              .firstOrNull;
+    AppraiserProfile? selectedProfile = profiles.firstOrNull;
+    var createVehicle = existingVehicle == null;
+    var createProfile = profiles.isEmpty;
+    var displayLabel = '';
+    var vin = '';
+    var licencePlate = '';
+    var appraiserName = '';
+    String? newVehicleId;
+    String? newProfileId;
+    final formKey = GlobalKey<FormState>();
+    String? saveError;
+    var saving = false;
+    final createdId = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            title: Text(
+              existingVehicle == null
+                  ? 'New Intake Assessment'
+                  : 'Another Intake Assessment',
+            ),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (vehicles.isNotEmpty) ...[
+                      Wrap(
+                        key: const Key('vehicle-choice'),
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Existing vehicle'),
+                            selected: !createVehicle,
+                            onSelected: saving
+                                ? null
+                                : (_) => setDialogState(
+                                    () => createVehicle = false,
+                                  ),
+                          ),
+                          ChoiceChip(
+                            label: const Text('New vehicle'),
+                            selected: createVehicle,
+                            onSelected: saving
+                                ? null
+                                : (_) => setDialogState(
+                                    () => createVehicle = true,
+                                  ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (!createVehicle)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Vehicle *'),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<Vehicle>(
+                            key: const Key('vehicle-selector'),
+                            isExpanded: true,
+                            itemHeight: null,
+                            initialValue: selectedVehicle,
+                            items: [
+                              for (final vehicle in vehicles)
+                                DropdownMenuItem(
+                                  value: vehicle,
+                                  child: Text(
+                                    _vehicleLabel(vehicle),
+                                    softWrap: true,
+                                  ),
+                                ),
+                            ],
+                            onChanged: saving
+                                ? null
+                                : (value) => setDialogState(
+                                    () => selectedVehicle = value,
+                                  ),
+                            validator: (value) =>
+                                value == null ? 'Select a Vehicle.' : null,
+                            decoration: const InputDecoration(
+                              hintText: 'Select a Vehicle',
+                            ),
+                          ),
+                        ],
+                      )
+                    else ...[
+                      _field(
+                        initialValue: displayLabel,
+                        label: 'Vehicle description (optional)',
+                        key: 'vehicle-display-label',
+                        onChanged: (value) => displayLabel = value,
+                      ),
+                      _field(
+                        initialValue: vin,
+                        label: 'VIN (optional)',
+                        key: 'vehicle-vin',
+                        onChanged: (value) => vin = value,
+                      ),
+                      _field(
+                        initialValue: licencePlate,
+                        label: 'Licence plate (optional)',
+                        key: 'vehicle-licence-plate',
+                        onChanged: (value) => licencePlate = value,
+                      ),
+                    ],
+                    if (profiles.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        key: const Key('appraiser-choice'),
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Select Appraiser'),
+                            selected: !createProfile,
+                            onSelected: saving
+                                ? null
+                                : (_) => setDialogState(
+                                    () => createProfile = false,
+                                  ),
+                          ),
+                          ChoiceChip(
+                            label: const Text('New Appraiser'),
+                            selected: createProfile,
+                            onSelected: saving
+                                ? null
+                                : (_) => setDialogState(
+                                    () => createProfile = true,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (!createProfile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Declared Appraiser Profile *'),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<AppraiserProfile>(
+                            key: const Key('appraiser-selector'),
+                            isExpanded: true,
+                            itemHeight: null,
+                            initialValue: selectedProfile,
+                            items: [
+                              for (final profile in profiles)
+                                DropdownMenuItem(
+                                  value: profile,
+                                  child: Text(
+                                    profile.displayName,
+                                    softWrap: true,
+                                  ),
+                                ),
+                            ],
+                            onChanged: saving
+                                ? null
+                                : (value) => setDialogState(
+                                    () => selectedProfile = value,
+                                  ),
+                            validator: (value) => value == null
+                                ? 'Select an Appraiser Profile.'
+                                : null,
+                            decoration: const InputDecoration(
+                              hintText: 'Select an Appraiser Profile',
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      _field(
+                        initialValue: appraiserName,
+                        label: 'Appraiser name',
+                        key: 'appraiser-name',
+                        required: true,
+                        onChanged: (value) => appraiserName = value,
+                      ),
+                    const Text(
+                      'Appraiser Profiles are device-local declared identities.',
+                    ),
+                    if (saveError != null)
+                      Text(
+                        saveError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              _field(
-                initialValue: vin,
-                label: 'VIN (optional)',
-                key: 'vehicle-vin',
-                onChanged: (value) => vin = value,
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
               ),
-              _field(
-                initialValue: licencePlate,
-                label: 'Licence plate (optional)',
-                key: 'vehicle-licence-plate',
-                onChanged: (value) => licencePlate = value,
-              ),
-              _field(
-                initialValue: appraiserId,
-                label: 'Appraiser Profile ID',
-                key: 'appraiser-id',
-                onChanged: (value) => appraiserId = value,
-              ),
-              _field(
-                initialValue: appraiserName,
-                label: 'Appraiser name',
-                key: 'appraiser-name',
-                onChanged: (value) => appraiserName = value,
+              FilledButton(
+                key: const Key('start-assessment'),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (!formKey.currentState!.validate()) return;
+                        setDialogState(() {
+                          saving = true;
+                          saveError = null;
+                        });
+                        final createdId = await widget.controller
+                            .startAssessment(
+                              vehicle: createVehicle
+                                  ? Vehicle(
+                                      id: newVehicleId ??= widget.controller
+                                          .generateVehicleId(),
+                                      displayLabel: _optional(displayLabel),
+                                      vin: _optional(vin),
+                                      licencePlate: _optional(licencePlate),
+                                    )
+                                  : selectedVehicle!,
+                              appraiserProfile: createProfile
+                                  ? AppraiserProfile(
+                                      id: newProfileId ??= widget.controller
+                                          .generateAppraiserProfileId(),
+                                      displayName: appraiserName.trim(),
+                                    )
+                                  : selectedProfile!,
+                            );
+                        if (!dialogContext.mounted) return;
+                        if (createdId != null) {
+                          Navigator.pop(dialogContext, createdId);
+                        } else {
+                          setDialogState(() {
+                            saving = false;
+                            saveError =
+                                widget.controller.state.message ??
+                                'Unable to save Intake Assessment.';
+                          });
+                        }
+                      },
+                child: const Text('Start Draft'),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('start-assessment'),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Start Draft'),
-          ),
-        ],
       ),
     );
-    final vehicle = Vehicle(
-      id: vehicleId.trim(),
-      vin: _optional(vin),
-      licencePlate: _optional(licencePlate),
-    );
-    final appraiser = AppraiserProfile(
-      id: appraiserId.trim(),
-      displayName: appraiserName.trim(),
-    );
-    if (submitted == true) {
-      await widget.controller.startAssessment(
-        vehicle: vehicle,
-        appraiserProfile: appraiser,
-      );
-    }
+    if (createdId != null && mounted) await _openWorkspace(createdId);
   }
 
   Widget _field({
@@ -208,13 +415,26 @@ class _AssessmentWorkflowScreenState extends State<AssessmentWorkflowScreen> {
     required String label,
     required String key,
     required ValueChanged<String> onChanged,
+    bool required = false,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: TextFormField(
-      key: Key(key),
-      initialValue: initialValue,
-      onChanged: onChanged,
-      decoration: InputDecoration(labelText: label),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(required ? '$label *' : label),
+        const SizedBox(height: 6),
+        TextFormField(
+          key: Key(key),
+          initialValue: initialValue,
+          onChanged: onChanged,
+          validator: required
+              ? (value) => (value?.trim().isEmpty ?? true)
+                    ? '$label is required.'
+                    : null
+              : null,
+          decoration: InputDecoration(hintText: label),
+        ),
+      ],
     ),
   );
 
@@ -233,6 +453,7 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
     required this.openEstimate,
     required this.openSeverity,
     required this.openCompletion,
+    required this.openGuidedStage,
     required this.startAnother,
   });
 
@@ -243,6 +464,7 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
   final AssessmentStageOpener openEstimate;
   final AssessmentStageOpener openSeverity;
   final AssessmentStageOpener openCompletion;
+  final GuidedAssessmentStageOpener? openGuidedStage;
   final Future<void> Function([Vehicle? vehicle]) startAnother;
 
   @override
@@ -259,14 +481,22 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
             return const Center(child: Text('Intake Assessment unavailable.'));
           }
           final editable = assessment.status == IntakeAssessmentStatus.draft;
+          final progress = AssessmentProgress.fromAssessment(assessment);
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                assessment.vehicle.id,
+                _vehicleLabel(assessment.vehicle),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               Text(_statusName(assessment.status)),
+              if (editable) ...[
+                Text(
+                  '${progress.readyStageCount} of 5 stages ready • '
+                  '${progress.outstandingCount} outstanding before completion',
+                ),
+                LinearProgressIndicator(value: progress.readyStageCount / 5),
+              ],
               Text('Appraiser: ${assessment.appraiserProfile.displayName}'),
               if (assessment.vehicle.vin != null)
                 Text('VIN: ${assessment.vehicle.vin}'),
@@ -274,6 +504,8 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
                 Text('Licence plate: ${assessment.vehicle.licencePlate}'),
               const SizedBox(height: 20),
               _stage(
+                stage: AssessmentStage.evidence,
+                progress: progress,
                 key: 'open-evidence',
                 icon: Icons.add_a_photo_outlined,
                 label: 'Capture evidence',
@@ -282,6 +514,8 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
                 context: context,
               ),
               _stage(
+                stage: AssessmentStage.findings,
+                progress: progress,
                 key: 'open-findings',
                 icon: Icons.fact_check_outlined,
                 label: 'Review Findings',
@@ -290,14 +524,8 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
                 context: context,
               ),
               _stage(
-                key: 'open-estimate',
-                icon: Icons.receipt_long_outlined,
-                label: 'Review Assessment Estimate',
-                enabled: editable,
-                onPressed: openEstimate,
-                context: context,
-              ),
-              _stage(
+                stage: AssessmentStage.severity,
+                progress: progress,
                 key: 'open-severity',
                 icon: Icons.monitor_heart_outlined,
                 label: 'Review Severity',
@@ -306,9 +534,21 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
                 context: context,
               ),
               _stage(
+                stage: AssessmentStage.estimate,
+                progress: progress,
+                key: 'open-estimate',
+                icon: Icons.receipt_long_outlined,
+                label: 'Review Assessment Estimate',
+                enabled: editable,
+                onPressed: openEstimate,
+                context: context,
+              ),
+              _stage(
+                stage: AssessmentStage.finalReview,
+                progress: progress,
                 key: 'open-completion',
                 icon: Icons.task_alt_outlined,
-                label: editable ? 'Completion Gate' : 'Revisions and Reports',
+                label: editable ? 'Finish assessment' : 'Revisions and Reports',
                 enabled: true,
                 onPressed: openCompletion,
                 context: context,
@@ -316,8 +556,8 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () async {
+                  Navigator.pop(context);
                   await startAnother(assessment.vehicle);
-                  if (context.mounted) Navigator.pop(context);
                 },
                 icon: const Icon(Icons.copy_outlined),
                 label: const Text('New assessment for this Vehicle'),
@@ -330,6 +570,8 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
   );
 
   Widget _stage({
+    required AssessmentStage stage,
+    required AssessmentProgress progress,
     required String key,
     required IconData icon,
     required String label,
@@ -342,15 +584,55 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
       enabled: enabled,
       leading: Icon(icon),
       title: Text(label),
+      subtitle: Text(_stageSubtitle(progress, stage)),
       trailing: const Icon(Icons.chevron_right),
       onTap: enabled
           ? () async {
-              await onPressed(context, assessmentId);
-              await controller.load();
+              if (openGuidedStage == null) {
+                await onPressed(context, assessmentId);
+                await controller.load();
+              } else {
+                var current = stage;
+                while (true) {
+                  final continueNext = await openGuidedStage!(
+                    context,
+                    assessmentId,
+                    current,
+                  );
+                  await controller.load();
+                  if (!context.mounted ||
+                      continueNext != true ||
+                      controller.state.phase != AssessmentWorkflowPhase.ready ||
+                      current.next == null) {
+                    break;
+                  }
+                  current = current.next!;
+                }
+              }
             }
           : null,
     ),
   );
+
+  String _stageSubtitle(AssessmentProgress progress, AssessmentStage stage) {
+    if (progress.assessment.status != IntakeAssessmentStatus.draft) {
+      return _statusName(progress.assessment.status);
+    }
+    final summary = switch (stage) {
+      AssessmentStage.evidence =>
+        '${progress.acceptedCaptureCount} accepted Captures',
+      AssessmentStage.findings =>
+        '${progress.proposedDecisionCount} Proposed decisions needed',
+      AssessmentStage.severity =>
+        '${progress.currentSeverityReviewCount} of ${progress.confirmedFindingCount} Confirmed reviewed',
+      AssessmentStage.estimate =>
+        '${progress.currentEstimateReviewCount} of ${progress.confirmedFindingCount} Confirmed current',
+      AssessmentStage.finalReview => 'Final review',
+    };
+    final prerequisite = progress.prerequisiteFor(stage);
+    if (prerequisite != null) return '$summary • $prerequisite';
+    return '$summary • ${progress.readyFor(stage) ? 'Ready' : '${progress.outstandingFor(stage)} outstanding'}';
+  }
 }
 
 String _statusName(IntakeAssessmentStatus status) => switch (status) {

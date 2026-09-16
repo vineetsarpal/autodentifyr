@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_severity_controller.dart';
+import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 import 'package:autodentifyr/services/assessment_severity_source.dart';
+import 'package:autodentifyr/presentation/widgets/assessment_evidence_selector.dart';
 
 class AssessmentSeverityScreen extends StatefulWidget {
-  const AssessmentSeverityScreen({super.key, required this.controller});
+  const AssessmentSeverityScreen({
+    super.key,
+    required this.controller,
+    this.onContinue,
+  });
 
   final AssessmentSeverityController controller;
+  final VoidCallback? onContinue;
 
   @override
   State<AssessmentSeverityScreen> createState() =>
@@ -26,6 +33,28 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Review severity')),
+    bottomNavigationBar: widget.onContinue == null
+        ? null
+        : SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  final state = widget.controller.state;
+                  return FilledButton(
+                    key: const Key('continue-assessment'),
+                    onPressed: state.phase == AssessmentSeverityPhase.ready
+                        ? widget.onContinue
+                        : null,
+                    child: state.phase == AssessmentSeverityPhase.saving
+                        ? const Text('Saving to device...')
+                        : const Text('Continue to estimate'),
+                  );
+                },
+              ),
+            ),
+          ),
     body: SafeArea(
       child: ListenableBuilder(
         listenable: widget.controller,
@@ -137,7 +166,7 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
                 ),
               Text('Reviewed by ${current.reviewerProfileId}'),
               Text(
-                'Reviewed at ${current.reviewedAt.toUtc().toIso8601String()}',
+                'Reviewed at ${formatAssessmentDateTime(context, current.reviewedAt)}',
               ),
               Text('Reason: ${current.reason}'),
               if (current.uncertainty != null)
@@ -151,14 +180,14 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
                 Text(
                   'Earlier review: ${_levelName(review.reviewedLevel)} by '
                   '${review.reviewerProfileId} at '
-                  '${review.reviewedAt.toUtc().toIso8601String()} — '
+                  '${formatAssessmentDateTime(context, review.reviewedAt)} — '
                   '${review.reason}',
                 ),
             ],
             const SizedBox(height: 8),
             OutlinedButton(
               key: Key('review-severity-${finding.id}'),
-              onPressed: () => _review(finding, current),
+              onPressed: () => _review(assessment, finding, current),
               child: Text(current == null ? 'Review severity' : 'Review again'),
             ),
           ],
@@ -168,15 +197,20 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
   }
 
   Future<void> _review(
+    IntakeAssessment assessment,
     DamageFinding finding,
     SeverityAssessment? current,
   ) async {
-    final action = await showDialog<ReviewSeverityAction>(
+    await showDialog<void>(
       context: context,
-      builder: (context) =>
-          _SeverityReviewDialog(finding: finding, current: current),
+      barrierDismissible: false,
+      builder: (context) => _SeverityReviewDialog(
+        assessment: assessment,
+        finding: finding,
+        current: current,
+        controller: widget.controller,
+      ),
     );
-    if (action != null) await widget.controller.submit(action);
   }
 
   static String _levelName(SeverityLevel level) => switch (level) {
@@ -195,9 +229,16 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
 }
 
 class _SeverityReviewDialog extends StatefulWidget {
-  const _SeverityReviewDialog({required this.finding, this.current});
+  const _SeverityReviewDialog({
+    required this.assessment,
+    required this.finding,
+    required this.controller,
+    this.current,
+  });
 
   final DamageFinding finding;
+  final IntakeAssessment assessment;
+  final AssessmentSeverityController controller;
   final SeverityAssessment? current;
 
   @override
@@ -205,7 +246,10 @@ class _SeverityReviewDialog extends StatefulWidget {
 }
 
 class _SeverityReviewDialogState extends State<_SeverityReviewDialog> {
+  final _formKey = GlobalKey<FormState>();
   late SeverityLevel _level;
+  bool _saving = false;
+  String? _saveError;
   late final TextEditingController _evidence;
   late final TextEditingController _reason;
   late final TextEditingController _uncertainty;
@@ -243,76 +287,165 @@ class _SeverityReviewDialogState extends State<_SeverityReviewDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Review Severity Assessment'),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DropdownButtonFormField<SeverityLevel>(
-            key: const Key('severity-level'),
-            initialValue: _level,
-            items: [
-              for (final level in SeverityLevel.values)
-                DropdownMenuItem(
-                  value: level,
-                  child: Text(_AssessmentSeverityScreenState._levelName(level)),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_saving,
+    child: AlertDialog(
+      scrollable: true,
+      title: const Text('Review Severity Assessment'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<SeverityLevel>(
+                key: const Key('severity-level'),
+                isExpanded: true,
+                initialValue: _level,
+                items: [
+                  for (final level in SeverityLevel.values)
+                    DropdownMenuItem(
+                      value: level,
+                      child: Text(
+                        _AssessmentSeverityScreenState._levelName(level),
+                      ),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _level = value!),
+                decoration: const InputDecoration(labelText: 'Conclusion'),
+              ),
+              AssessmentEvidenceSelector(
+                key: const Key('severity-evidence'),
+                label: 'Evidence Captures',
+                captures: widget.assessment.captures
+                    .where(
+                      (capture) => widget.finding.supportingCaptureIds.contains(
+                        capture.id,
+                      ),
+                    )
+                    .toList(),
+                initialIds: _csv(_evidence.text),
+                onChanged: (ids) => _evidence.text = ids.join(', '),
+              ),
+              _field(_reason, 'Reason', 'severity-reason', required: true),
+              _field(
+                _uncertainty,
+                'Uncertainty',
+                'severity-uncertainty',
+                required:
+                    _level == SeverityLevel.undetermined ||
+                    widget.finding.hasConflictingViews,
+              ),
+              _field(
+                _additionalView,
+                'Specific additional-view request',
+                'severity-additional-view',
+                required: _level == SeverityLevel.undetermined,
+                onChanged: (_) => setState(() {}),
+              ),
+              _field(
+                _overrideReason,
+                'Additional-view override reason',
+                'severity-override-reason',
+                requiredWhen: () =>
+                    _level != SeverityLevel.undetermined &&
+                    _additionalView.text.trim().isNotEmpty,
+                validator: (value) =>
+                    _additionalView.text.trim().isEmpty &&
+                        (value?.trim().isNotEmpty ?? false)
+                    ? 'Enter an additional-view request first.'
+                    : null,
+              ),
+              _field(_limitation, 'Limitation', 'severity-limitation'),
+              if (_saveError != null)
+                Text(
+                  _saveError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
             ],
-            onChanged: (value) => setState(() => _level = value!),
-            decoration: const InputDecoration(labelText: 'Conclusion'),
-          ),
-          _field(_evidence, 'Evidence Capture IDs', 'severity-evidence'),
-          _field(_reason, 'Reason', 'severity-reason'),
-          _field(_uncertainty, 'Uncertainty', 'severity-uncertainty'),
-          _field(
-            _additionalView,
-            'Specific additional-view request',
-            'severity-additional-view',
-          ),
-          _field(
-            _overrideReason,
-            'Additional-view override reason',
-            'severity-override-reason',
-          ),
-          _field(_limitation, 'Limitation', 'severity-limitation'),
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const Key('submit-severity-review'),
-        onPressed: () => Navigator.pop(
-          context,
-          ReviewSeverityAction(
-            findingId: widget.finding.id,
-            reviewedLevel: _level,
-            evidenceCaptureIds: _csv(_evidence.text),
-            reason: _reason.text,
-            uncertainty: _nullable(_uncertainty.text),
-            additionalViewRequest: _nullable(_additionalView.text),
-            additionalViewOverrideReason: _nullable(_overrideReason.text),
-            limitation: _nullable(_limitation.text),
           ),
         ),
-        child: const Text('Save review'),
       ),
-    ],
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('submit-severity-review'),
+          onPressed: _saving ? null : _submit,
+          child: const Text('Save review'),
+        ),
+      ],
+    ),
   );
 
-  Widget _field(TextEditingController controller, String label, String key) =>
-      Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: TextField(
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    await widget.controller.submit(
+      ReviewSeverityAction(
+        findingId: widget.finding.id,
+        reviewedLevel: _level,
+        evidenceCaptureIds: _csv(_evidence.text),
+        reason: _reason.text,
+        uncertainty: _nullable(_uncertainty.text),
+        additionalViewRequest: _nullable(_additionalView.text),
+        additionalViewOverrideReason: _nullable(_overrideReason.text),
+        limitation: _nullable(_limitation.text),
+      ),
+    );
+    if (!mounted) return;
+    if (widget.controller.state.phase == AssessmentSeverityPhase.ready) {
+      Navigator.pop(context);
+    } else {
+      setState(() {
+        _saving = false;
+        _saveError =
+            widget.controller.state.message ??
+            'Unable to save Severity Assessment.';
+      });
+    }
+  }
+
+  Widget _field(
+    TextEditingController controller,
+    String label,
+    String key, {
+    bool required = false,
+    bool Function()? requiredWhen,
+    String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(required || (requiredWhen?.call() ?? false) ? '$label *' : label),
+        const SizedBox(height: 6),
+        TextFormField(
           key: Key(key),
           controller: controller,
-          decoration: InputDecoration(labelText: label),
+          onChanged: onChanged,
+          minLines: 2,
+          maxLines: 4,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          validator: (value) {
+            if ((required || (requiredWhen?.call() ?? false)) &&
+                (value?.trim().isEmpty ?? true)) {
+              return '$label is required.';
+            }
+            return validator?.call(value);
+          },
+          decoration: InputDecoration(hintText: label),
         ),
-      );
+      ],
+    ),
+  );
 
   List<String> _csv(String value) => value
       .split(',')

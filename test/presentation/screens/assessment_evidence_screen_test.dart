@@ -35,10 +35,18 @@ void main() {
       now: () => DateTime.utc(2026, 9, 6, 18, 2),
     );
 
+    var continued = false;
     await tester.pumpWidget(
-      MaterialApp(home: AssessmentEvidenceScreen(controller: controller)),
+      MaterialApp(
+        home: AssessmentEvidenceScreen(
+          controller: controller,
+          onContinue: () => continued = true,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('continue-assessment')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('take-photo')));
     await tester.pumpAndSettle();
@@ -71,6 +79,8 @@ void main() {
     expect(find.text('Camera still'), findsOneWidget);
     expect(find.text('Imported image'), findsOneWidget);
     expect((await repository.findById('assessment-1'))!.captures, hasLength(2));
+    await tester.tap(find.byKey(const Key('continue-assessment')));
+    expect(continued, isTrue);
   });
 
   testWidgets('Appraiser confirms removal of an accepted capture', (

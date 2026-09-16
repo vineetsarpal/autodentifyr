@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/services/assessment_report_service.dart';
+import 'package:image/image.dart' as img;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -38,6 +39,14 @@ void main() {
         contains('Automation limitation: Automated severity unavailable.'),
       );
       expect(document.canonicalText, contains('Visible exterior damage only.'));
+      expect(document.canonicalText, contains('Blue Corolla'));
+      expect(
+        document.sections
+            .firstWhere((section) => section.heading == 'Vehicle')
+            .lines
+            .last,
+        'Internal Vehicle ID: vehicle-1',
+      );
       expect(pdf.revisionId, document.revisionId);
       expect(sharedImage.revisionId, document.revisionId);
       expect(pdf.canonicalText, document.canonicalText);
@@ -70,13 +79,85 @@ void main() {
       }
     },
   );
+
+  test(
+    'both exports embed a reduced accepted photo from the revision',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('atd39-photo-');
+      addTearDown(() => directory.delete(recursive: true));
+      final photoPath = '${directory.path}/photo.jpg';
+      final source = img.Image(width: 80, height: 80);
+      img.fill(source, color: img.ColorRgb8(240, 20, 20));
+      await File(photoPath).writeAsBytes(img.encodeJpg(source));
+      final completed = _reportReadyAssessment(capturePath: photoPath).complete(
+        revisionId: 'revision-photo',
+        completedAt: DateTime.utc(2026, 9, 8, 20),
+        noVisibleDamageConfirmed: false,
+      );
+      final document = AssessmentReportService().build(
+        assessment: completed,
+        revisionId: 'revision-photo',
+      );
+      final pdf = await const AssessmentPdfReportRenderer().render(document);
+      final png = const AssessmentSharedImageReportRenderer().render(document);
+      final image = img.decodePng(png.bytes)!;
+
+      expect(document.captures.single.localPath, photoPath);
+      expect(pdf.bytes.length, greaterThan(3000));
+      expect(
+        Iterable.generate(
+          image.height,
+          (y) => image.getPixel(50, y),
+        ).any((pixel) => pixel.r > 180 && pixel.g < 80),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'PDF paginates five accepted photos without dropping audit text',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('atd39-pages-');
+      addTearDown(() => directory.delete(recursive: true));
+      final photoPath = '${directory.path}/photo.jpg';
+      final source = img.Image(width: 80, height: 80);
+      img.fill(source, color: img.ColorRgb8(20, 80, 200));
+      await File(photoPath).writeAsBytes(img.encodeJpg(source));
+      var assessment = _reportReadyAssessment(capturePath: photoPath);
+      for (var index = 2; index <= 5; index++) {
+        assessment = assessment.acceptCapture(
+          Capture(
+            id: 'capture-$index',
+            source: CaptureSource.import,
+            localPath: photoPath,
+            acceptedByProfileId: 'appraiser-1',
+            acceptedAt: DateTime.utc(2026, 9, 8, 19, index),
+          ),
+        );
+      }
+      final completed = assessment.complete(
+        revisionId: 'revision-five',
+        completedAt: DateTime.utc(2026, 9, 8, 20),
+        noVisibleDamageConfirmed: false,
+      );
+      final document = AssessmentReportService().build(
+        assessment: completed,
+        revisionId: 'revision-five',
+      );
+      final pdf = await const AssessmentPdfReportRenderer().render(document);
+
+      expect(document.captures, hasLength(5));
+      expect(document.canonicalText, contains('Correction provenance'));
+      expect(pdf.bytes.length, greaterThan(5000));
+    },
+  );
 }
 
-IntakeAssessment _reportReadyAssessment() {
+IntakeAssessment _reportReadyAssessment({String? capturePath}) {
   final capture = Capture(
     id: 'capture-1',
     source: CaptureSource.camera,
-    localPath: '/evidence/capture-1.jpg',
+    localPath: capturePath ?? '/evidence/capture-1.jpg',
     acceptedByProfileId: 'appraiser-1',
     acceptedAt: DateTime.utc(2026, 9, 8, 19, 1),
   );
@@ -104,6 +185,7 @@ IntakeAssessment _reportReadyAssessment() {
             id: 'assessment-1',
             vehicle: const Vehicle(
               id: 'vehicle-1',
+              displayLabel: 'Blue Corolla',
               vin: '1A2B3C4D5E6F7G8H9',
               licencePlate: 'ABC123',
             ),

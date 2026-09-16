@@ -20,12 +20,15 @@ class AssessmentReportDocument {
     required this.revisionId,
     required this.revisionNumber,
     required this.title,
+    required List<Capture> captures,
     required List<AssessmentReportSection> sections,
-  }) : sections = List.unmodifiable(sections);
+  }) : captures = List.unmodifiable(captures),
+       sections = List.unmodifiable(sections);
 
   final String revisionId;
   final int revisionNumber;
   final String title;
+  final List<Capture> captures;
   final List<AssessmentReportSection> sections;
 
   String get canonicalText => [
@@ -104,6 +107,7 @@ class AssessmentReportService {
       revisionId: revision.id,
       revisionNumber: revision.revisionNumber,
       title: 'Preliminary Damage Assessment',
+      captures: revision.captures,
       sections: [
         if (voidRecord != null)
           AssessmentReportSection(
@@ -115,21 +119,22 @@ class AssessmentReportService {
             ],
           ),
         AssessmentReportSection(
-          heading: 'Revision ${revision.revisionNumber}',
-          lines: [
-            'Revision ID: ${revision.id}',
-            'Completed by: ${revision.completedByName} (${revision.completedByProfileId})',
-            'Completed at: ${_time(revision.completedAt)}',
-          ],
-        ),
-        AssessmentReportSection(
           heading: 'Vehicle',
           lines: [
-            'Vehicle ID: ${revision.vehicleSnapshot.id}',
+            if (revision.vehicleSnapshot.displayLabel != null)
+              revision.vehicleSnapshot.displayLabel!,
             if (revision.vehicleSnapshot.vin != null)
               'VIN: ${revision.vehicleSnapshot.vin}',
             if (revision.vehicleSnapshot.licencePlate != null)
               'Licence plate: ${revision.vehicleSnapshot.licencePlate}',
+            'Internal Vehicle ID: ${revision.vehicleSnapshot.id}',
+          ],
+        ),
+        AssessmentReportSection(
+          heading: 'Photos',
+          lines: [
+            for (final capture in revision.captures)
+              'Photo ${capture.id}: ${capture.source.name}',
           ],
         ),
         AssessmentReportSection(
@@ -141,30 +146,12 @@ class AssessmentReportService {
           ],
         ),
         AssessmentReportSection(
-          heading: 'Accepted evidence',
-          lines: [
-            for (final capture in revision.captures)
-              'Capture ${capture.id}: ${capture.source.name}, accepted by ${capture.acceptedByProfileId} at ${_time(capture.acceptedAt)}',
-            for (final observation in revision.observations)
-              'Observation ${observation.id}: ${observation.rawClass}, confidence ${observation.confidence.toStringAsFixed(2)}, model ${observation.modelIdentifier}, runtime ${observation.runtimeIdentifier}',
-          ],
-        ),
-        AssessmentReportSection(
           heading: 'Confirmed Findings',
           lines: revision.confirmedFindings.isEmpty
               ? ['None']
               : [
                   for (final finding in revision.confirmedFindings)
-                    '${finding.id}: ${finding.vehicleComponent} - ${finding.damageType}; evidence ${finding.supportingCaptureIds.join(', ')}${finding.manualEvidenceNote == null ? '' : '; Appraiser note: ${finding.manualEvidenceNote}'}',
-                ],
-        ),
-        AssessmentReportSection(
-          heading: 'Correction provenance',
-          lines: revision.corrections.isEmpty
-              ? ['No Assessment Corrections recorded.']
-              : [
-                  for (final correction in revision.corrections)
-                    '${correction.id}: ${correction.kind.name}; Finding ${correction.findingId}; by ${correction.authorProfileId} at ${_time(correction.occurredAt)}; reason: ${correction.reason}; originals ${correction.originals.map((value) => value.id).join(', ')}; replacements ${correction.replacements.map((value) => value.id).join(', ')}',
+                    '${finding.vehicleComponent} - ${finding.damageType}; photos ${finding.supportingCaptureIds.join(', ')}${finding.manualEvidenceNote == null ? '' : '; Appraiser note: ${finding.manualEvidenceNote}'}',
                 ],
         ),
         _estimateSection(revision.estimate),
@@ -180,6 +167,39 @@ class AssessmentReportService {
           lines: const [
             'This preliminary assessment is not a Formal Repair Estimate or repair authorization.',
           ],
+        ),
+        AssessmentReportSection(
+          heading: 'Revision ${revision.revisionNumber} - audit details',
+          lines: [
+            'Revision ID: ${revision.id}',
+            'Completed by: ${revision.completedByName} (${revision.completedByProfileId})',
+            'Completed at: ${_time(revision.completedAt)}',
+          ],
+        ),
+        AssessmentReportSection(
+          heading: 'Accepted evidence history',
+          lines: [
+            for (final capture in revision.captures)
+              'Capture ${capture.id}: ${capture.source.name}, accepted by ${capture.acceptedByProfileId} at ${_time(capture.acceptedAt)}',
+            for (final observation in revision.observations)
+              'Observation ${observation.id}: ${observation.rawClass}, confidence ${observation.confidence.toStringAsFixed(2)}, model ${observation.modelIdentifier}, runtime ${observation.runtimeIdentifier}',
+          ],
+        ),
+        AssessmentReportSection(
+          heading: 'Finding identities',
+          lines: [
+            for (final finding in revision.confirmedFindings)
+              '${finding.vehicleComponent} - ${finding.damageType}: Finding ${finding.id}; observations ${finding.observationIds.join(', ')}',
+          ],
+        ),
+        AssessmentReportSection(
+          heading: 'Correction provenance',
+          lines: revision.corrections.isEmpty
+              ? ['No Assessment Corrections recorded.']
+              : [
+                  for (final correction in revision.corrections)
+                    '${correction.id}: ${correction.kind.name}; Finding ${correction.findingId}; by ${correction.authorProfileId} at ${_time(correction.occurredAt)}; reason: ${correction.reason}; originals ${correction.originals.map((value) => value.id).join(', ')}; replacements ${correction.replacements.map((value) => value.id).join(', ')}',
+                ],
         ),
       ],
     );
@@ -251,6 +271,13 @@ class AssessmentPdfReportRenderer {
   Future<AssessmentReportArtifact> render(
     AssessmentReportDocument document,
   ) async {
+    final photos = <String, Uint8List>{};
+    for (final capture in document.captures) {
+      final photo = _readReducedPhoto(capture, maxDimension: 1200);
+      if (photo != null) {
+        photos[capture.id] = Uint8List.fromList(img.encodeJpg(photo));
+      }
+    }
     final pdf = pw.Document(
       title: '${document.title} - Revision ${document.revisionNumber}',
       author: 'AutoDentifyr',
@@ -274,7 +301,7 @@ class AssessmentPdfReportRenderer {
           child: pw.Text('Page ${context.pageNumber} of ${context.pagesCount}'),
         ),
         build: (context) => [
-          for (final section in document.sections)
+          for (final section in document.sections) ...[
             pw.Container(
               margin: const pw.EdgeInsets.only(top: 14),
               child: pw.Column(
@@ -299,6 +326,20 @@ class AssessmentPdfReportRenderer {
                 ],
               ),
             ),
+            if (section.heading == 'Photos')
+              for (final capture in document.captures)
+                if (photos[capture.id] case final bytes?)
+                  pw.Container(
+                    margin: const pw.EdgeInsets.only(top: 8, bottom: 8),
+                    child: pw.Image(
+                      pw.MemoryImage(bytes),
+                      height: 180,
+                      fit: pw.BoxFit.contain,
+                    ),
+                  )
+                else
+                  pw.Text('Photo ${capture.id} unavailable on this device.'),
+          ],
         ],
       ),
     );
@@ -324,7 +365,16 @@ class AssessmentSharedImageReportRenderer {
           for (final wrapped in _wrap(line, 92)) _ImageLine(wrapped),
       ],
     ];
-    final image = img.Image(width: 1200, height: 64 + displayLines.length * 30);
+    final photos = <(Capture, img.Image?)>[];
+    for (final capture in document.captures) {
+      final photo = _readReducedPhoto(capture, maxDimension: 320);
+      photos.add((capture, photo));
+    }
+    final photoHeight = ((photos.length + 2) ~/ 3) * 340;
+    final image = img.Image(
+      width: 1200,
+      height: 64 + displayLines.length * 30 + photoHeight,
+    );
     img.fill(image, color: img.ColorRgb8(248, 250, 252));
     var y = 30;
     for (final line in displayLines) {
@@ -339,6 +389,32 @@ class AssessmentSharedImageReportRenderer {
             : img.ColorRgb8(13, 38, 61),
       );
       y += 30;
+      if (line.heading && line.text == 'Photos') {
+        for (final (index, slot) in photos.indexed) {
+          final (capture, photo) = slot;
+          final x = 36 + (index % 3) * 380;
+          final top = y + (index ~/ 3) * 340;
+          img.drawString(
+            image,
+            'Photo ${capture.id}',
+            font: img.arial14,
+            x: x,
+            y: top,
+          );
+          if (photo != null) {
+            img.compositeImage(image, photo, dstX: x, dstY: top + 24);
+          } else {
+            img.drawString(
+              image,
+              'Image unavailable on this device',
+              font: img.arial14,
+              x: x,
+              y: top + 32,
+            );
+          }
+        }
+        y += photoHeight;
+      }
     }
     return AssessmentReportArtifact(
       revisionId: document.revisionId,
@@ -364,6 +440,26 @@ class AssessmentSharedImageReportRenderer {
     }
     if (current.isNotEmpty) output.add(current);
     return output;
+  }
+}
+
+img.Image? _readReducedPhoto(Capture capture, {required int maxDimension}) {
+  try {
+    final file = File(capture.localPath);
+    if (!file.existsSync()) return null;
+    final decoded = img.decodeImage(file.readAsBytesSync());
+    if (decoded == null) return null;
+    final scale =
+        maxDimension /
+        (decoded.width > decoded.height ? decoded.width : decoded.height);
+    if (scale >= 1) return decoded;
+    return img.copyResize(
+      decoded,
+      width: (decoded.width * scale).round(),
+      height: (decoded.height * scale).round(),
+    );
+  } catch (_) {
+    return null;
   }
 }
 

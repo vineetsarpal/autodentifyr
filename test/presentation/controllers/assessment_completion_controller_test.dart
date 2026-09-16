@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_completion_controller.dart';
+import 'package:autodentifyr/presentation/controllers/assessment_progress.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,6 +23,18 @@ void main() {
         await controller.load();
 
         expect(controller.state.phase, AssessmentCompletionPhase.ready);
+        final progress = AssessmentProgress.fromAssessment(_draft());
+        expect(progress.readyStageCount, 0);
+        expect(progress.readyFor(AssessmentStage.severity), isFalse);
+        expect(
+          progress.prerequisiteFor(AssessmentStage.severity),
+          'Add evidence first',
+        );
+        expect(progress.readyFor(AssessmentStage.finalReview), isFalse);
+        expect(
+          progress.outstandingFor(AssessmentStage.finalReview),
+          progress.outstandingCount,
+        );
         expect(
           controller.state.completionBlockers,
           contains(
@@ -99,12 +112,22 @@ void main() {
               ),
             );
         await repository.save(assessment);
+        final draftProgress = AssessmentProgress.fromAssessment(assessment);
+        expect(draftProgress.outstandingCount, 1);
+        expect(draftProgress.outstandingFor(AssessmentStage.finalReview), 1);
+        expect(draftProgress.readyFor(AssessmentStage.finalReview), isFalse);
         final controller = _controller(repository);
         await controller.load();
 
         await controller.complete(noVisibleDamageConfirmed: true);
 
         final completed = controller.state.assessment!;
+        expect(
+          AssessmentProgress.fromAssessment(completed).readyFor(
+            AssessmentStage.finalReview,
+          ),
+          isTrue,
+        );
         final revision = completed.completedRevisions.single;
         expect(controller.state.phase, AssessmentCompletionPhase.ready);
         expect(completed.status, IntakeAssessmentStatus.completed);
@@ -302,6 +325,15 @@ void main() {
           CompletionBlockerCode.estimateReviewRequired,
           CompletionBlockerCode.severityReviewRequired,
         ]),
+      );
+      final progress = AssessmentProgress.fromAssessment(corrected);
+      expect(progress.currentEstimateReviewCount, 0);
+      expect(progress.currentSeverityReviewCount, 0);
+      expect(progress.outstandingFor(AssessmentStage.estimate), greaterThan(0));
+      expect(progress.outstandingFor(AssessmentStage.severity), greaterThan(0));
+      expect(
+        progress.outstandingCount,
+        controller.state.completionBlockers.length,
       );
     });
 
@@ -506,6 +538,15 @@ void main() {
           throwsA(isA<AssessmentInvariantViolation>()),
         );
         await controller.reopen();
+        final reopenedProgress = AssessmentProgress.fromAssessment(
+          controller.state.assessment!,
+        );
+        expect(reopenedProgress.acceptedCaptureCount, 1);
+        expect(reopenedProgress.outstandingFor(AssessmentStage.finalReview), 1);
+        expect(
+          reopenedProgress.outstandingCount,
+          controller.state.completionBlockers.length,
+        );
         final revisedDraft = controller.state.assessment!.acceptCapture(
           _secondCapture(),
         );

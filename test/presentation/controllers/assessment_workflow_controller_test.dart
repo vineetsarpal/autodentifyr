@@ -34,7 +34,7 @@ void main() {
       expect(controller.state.assessments, [existing]);
       expect(controller.state.vehicles, [existing.vehicle]);
 
-      await controller.startAssessment(
+      final createdId = await controller.startAssessment(
         vehicle: existing.vehicle,
         appraiserProfile: const AppraiserProfile(
           id: 'appraiser-2',
@@ -42,6 +42,7 @@ void main() {
         ),
       );
 
+      expect(createdId, 'assessment-2');
       expect(controller.state.phase, AssessmentWorkflowPhase.ready);
       expect(controller.state.assessments.map((value) => value.id), [
         'assessment-2',

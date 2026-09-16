@@ -4,9 +4,14 @@ import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_estimate_controller.dart';
 
 class AssessmentEstimateScreen extends StatefulWidget {
-  const AssessmentEstimateScreen({super.key, required this.controller});
+  const AssessmentEstimateScreen({
+    super.key,
+    required this.controller,
+    this.onContinue,
+  });
 
   final AssessmentEstimateController controller;
+  final VoidCallback? onContinue;
 
   @override
   State<AssessmentEstimateScreen> createState() =>
@@ -25,6 +30,28 @@ class _AssessmentEstimateScreenState extends State<AssessmentEstimateScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Draft Estimate')),
+    bottomNavigationBar: widget.onContinue == null
+        ? null
+        : SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  final state = widget.controller.state;
+                  return FilledButton(
+                    key: const Key('continue-assessment'),
+                    onPressed: state.phase == AssessmentEstimatePhase.ready
+                        ? widget.onContinue
+                        : null,
+                    child: state.phase == AssessmentEstimatePhase.calculating
+                        ? const Text('Updating estimate...')
+                        : const Text('Continue to final review'),
+                  );
+                },
+              ),
+            ),
+          ),
     body: SafeArea(
       child: ListenableBuilder(
         listenable: widget.controller,
@@ -203,92 +230,239 @@ class _AssessmentEstimateScreenState extends State<AssessmentEstimateScreen> {
       text: operation.pricingSourceVersion ?? '',
     );
     final reason = TextEditingController();
-    final submitted = await showDialog<bool>(
+    final formKey = GlobalKey<FormState>();
+    var saving = false;
+    String? saveError;
+    bool hasAnyPrice() => [
+      minimum,
+      maximum,
+      currency,
+      source,
+    ].any((controller) => controller.text.trim().isNotEmpty);
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Override Repair Operation'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _field(description, 'Description', 'operation-description'),
-              _field(minimum, 'Minimum cents', 'minimum-cents', numeric: true),
-              _field(maximum, 'Maximum cents', 'maximum-cents', numeric: true),
-              _field(currency, 'Currency', 'currency'),
-              _field(
-                source,
-                'Pricing source version',
-                'pricing-source-version',
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            scrollable: true,
+            title: const Text('Override Repair Operation'),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _field(
+                      description,
+                      'Description',
+                      'operation-description',
+                      required: true,
+                      multiline: true,
+                    ),
+                    _field(
+                      minimum,
+                      'Minimum cents',
+                      'minimum-cents',
+                      numeric: true,
+                      requiredWhen: hasAnyPrice,
+                      onChanged: (_) => setDialogState(() {}),
+                      validator: (value) {
+                        final amount = int.tryParse(value?.trim() ?? '');
+                        if (amount != null && amount < 0) {
+                          return 'Minimum cents must be nonnegative.';
+                        }
+                        if ((value?.trim().isNotEmpty ?? false) &&
+                            amount == null) {
+                          return 'Enter whole cents.';
+                        }
+                        return null;
+                      },
+                    ),
+                    _field(
+                      maximum,
+                      'Maximum cents',
+                      'maximum-cents',
+                      numeric: true,
+                      requiredWhen: hasAnyPrice,
+                      onChanged: (_) => setDialogState(() {}),
+                      validator: (value) {
+                        final amount = int.tryParse(value?.trim() ?? '');
+                        if ((value?.trim().isNotEmpty ?? false) &&
+                            amount == null) {
+                          return 'Enter whole cents.';
+                        }
+                        if (amount != null && amount < 0) {
+                          return 'Maximum cents must be nonnegative.';
+                        }
+                        final min = int.tryParse(minimum.text.trim());
+                        if (amount != null && min != null && amount < min) {
+                          return 'Maximum cents must be at least minimum cents.';
+                        }
+                        return null;
+                      },
+                    ),
+                    _field(
+                      currency,
+                      'Currency',
+                      'currency',
+                      requiredWhen: hasAnyPrice,
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                    _field(
+                      source,
+                      'Pricing source version',
+                      'pricing-source-version',
+                      requiredWhen: hasAnyPrice,
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                    _field(
+                      reason,
+                      'Override reason',
+                      'override-reason',
+                      required: true,
+                      multiline: true,
+                    ),
+                    if (saveError != null)
+                      Text(
+                        saveError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              _field(reason, 'Override reason', 'override-reason'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const Key('submit-estimate-action'),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (!formKey.currentState!.validate()) return;
+                        setDialogState(() {
+                          saving = true;
+                          saveError = null;
+                        });
+                        await widget.controller.submit(
+                          OverrideRepairOperationAction(
+                            operationId: operation.id,
+                            description: description.text,
+                            minimumCents: int.tryParse(minimum.text),
+                            maximumCents: int.tryParse(maximum.text),
+                            currency: _nullable(currency.text),
+                            pricingSourceVersion: _nullable(source.text),
+                            reason: reason.text,
+                          ),
+                        );
+                        if (!dialogContext.mounted) return;
+                        if (widget.controller.state.phase ==
+                            AssessmentEstimatePhase.ready) {
+                          Navigator.pop(dialogContext);
+                        } else {
+                          setDialogState(() {
+                            saving = false;
+                            saveError =
+                                widget.controller.state.message ??
+                                'Unable to save override.';
+                          });
+                        }
+                      },
+                child: const Text('Save override'),
+              ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('submit-estimate-action'),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save override'),
-          ),
-        ],
       ),
     );
-    final action = OverrideRepairOperationAction(
-      operationId: operation.id,
-      description: description.text,
-      minimumCents: int.tryParse(minimum.text),
-      maximumCents: int.tryParse(maximum.text),
-      currency: _nullable(currency.text),
-      pricingSourceVersion: _nullable(source.text),
-      reason: reason.text,
-    );
-    if (submitted != true) return;
-    await widget.controller.submit(action);
   }
 
   Future<void> _editAssumptions(AssessmentEstimate estimate) async {
     final assumptions = TextEditingController(
       text: estimate.assumptions.join('\n'),
     );
-    final submitted = await showDialog<bool>(
+    var saving = false;
+    String? saveError;
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit assumptions'),
-        content: TextField(
-          key: const Key('estimate-assumptions'),
-          controller: assumptions,
-          minLines: 3,
-          maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: 'One assumption per line',
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            title: const Text('Edit assumptions'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    key: const Key('estimate-assumptions'),
+                    controller: assumptions,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      labelText: 'One assumption per line',
+                    ),
+                  ),
+                  if (saveError != null)
+                    Text(
+                      saveError!,
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const Key('submit-estimate-action'),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          saving = true;
+                          saveError = null;
+                        });
+                        await widget.controller.submit(
+                          EditEstimateAssumptionsAction(
+                            assumptions.text
+                                .split('\n')
+                                .map((value) => value.trim())
+                                .where((value) => value.isNotEmpty)
+                                .toList(),
+                          ),
+                        );
+                        if (!dialogContext.mounted) return;
+                        if (widget.controller.state.phase ==
+                            AssessmentEstimatePhase.ready) {
+                          Navigator.pop(dialogContext);
+                        } else {
+                          setDialogState(() {
+                            saving = false;
+                            saveError =
+                                widget.controller.state.message ??
+                                'Unable to save assumptions.';
+                          });
+                        }
+                      },
+                child: const Text('Save assumptions'),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('submit-estimate-action'),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save assumptions'),
-          ),
-        ],
       ),
     );
-    final action = EditEstimateAssumptionsAction(
-      assumptions.text
-          .split('\n')
-          .map((value) => value.trim())
-          .where((value) => value.isNotEmpty)
-          .toList(),
-    );
-    if (submitted != true) return;
-    await widget.controller.submit(action);
   }
 
   Widget _field(
@@ -296,13 +470,42 @@ class _AssessmentEstimateScreenState extends State<AssessmentEstimateScreen> {
     String label,
     String key, {
     bool numeric = false,
+    bool multiline = false,
+    bool required = false,
+    bool Function()? requiredWhen,
+    String? Function(String?)? validator,
+    ValueChanged<String>? onChanged,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: TextField(
-      key: Key(key),
-      controller: controller,
-      keyboardType: numeric ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(labelText: label),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(required || (requiredWhen?.call() ?? false) ? '$label *' : label),
+        const SizedBox(height: 6),
+        TextFormField(
+          key: Key(key),
+          controller: controller,
+          onChanged: onChanged,
+          minLines: multiline ? 2 : 1,
+          maxLines: multiline ? 4 : 1,
+          keyboardType: numeric
+              ? TextInputType.number
+              : multiline
+              ? TextInputType.multiline
+              : TextInputType.text,
+          textInputAction: multiline
+              ? TextInputAction.newline
+              : TextInputAction.next,
+          validator: (value) {
+            if ((required || (requiredWhen?.call() ?? false)) &&
+                (value?.trim().isEmpty ?? true)) {
+              return '$label is required.';
+            }
+            return validator?.call(value);
+          },
+          decoration: InputDecoration(hintText: label),
+        ),
+      ],
     ),
   );
 

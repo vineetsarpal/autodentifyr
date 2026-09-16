@@ -90,7 +90,7 @@ class AssessmentCompletionController extends ChangeNotifier {
         AssessmentCompletionState(
           phase: AssessmentCompletionPhase.ready,
           assessment: assessment,
-          completionBlockers: _completionBlockers(assessment),
+          completionBlockers: completionBlockersFor(assessment),
         ),
       );
     } catch (error) {
@@ -106,7 +106,7 @@ class AssessmentCompletionController extends ChangeNotifier {
   Future<void> complete({required bool noVisibleDamageConfirmed}) async {
     final assessment = _state.assessment;
     if (assessment == null) return;
-    final blockers = _completionBlockers(assessment)
+    final blockers = completionBlockersFor(assessment)
         .where(
           (blocker) =>
               blocker.code !=
@@ -155,7 +155,7 @@ class AssessmentCompletionController extends ChangeNotifier {
         AssessmentCompletionState(
           phase: AssessmentCompletionPhase.failed,
           assessment: assessment,
-          completionBlockers: _completionBlockers(assessment),
+          completionBlockers: completionBlockersFor(assessment),
           message: error is AssessmentInvariantViolation
               ? error.message
               : error.toString(),
@@ -189,7 +189,7 @@ class AssessmentCompletionController extends ChangeNotifier {
         AssessmentCompletionState(
           phase: AssessmentCompletionPhase.ready,
           assessment: updated,
-          completionBlockers: _completionBlockers(updated),
+          completionBlockers: completionBlockersFor(updated),
         ),
       );
     } catch (error) {
@@ -197,7 +197,7 @@ class AssessmentCompletionController extends ChangeNotifier {
         AssessmentCompletionState(
           phase: AssessmentCompletionPhase.failed,
           assessment: assessment,
-          completionBlockers: _completionBlockers(assessment),
+          completionBlockers: completionBlockersFor(assessment),
           message: error is AssessmentInvariantViolation
               ? error.message
               : error.toString(),
@@ -228,7 +228,7 @@ class AssessmentCompletionController extends ChangeNotifier {
         AssessmentCompletionState(
           phase: AssessmentCompletionPhase.ready,
           assessment: reopened,
-          completionBlockers: _completionBlockers(reopened),
+          completionBlockers: completionBlockersFor(reopened),
         ),
       );
     } catch (error) {
@@ -284,95 +284,94 @@ class AssessmentCompletionController extends ChangeNotifier {
     }
   }
 
-  List<CompletionBlocker> _completionBlockers(
-    IntakeAssessment assessment,
-  ) => List.unmodifiable([
-    if (assessment.status != IntakeAssessmentStatus.draft)
-      ...const <CompletionBlocker>[]
-    else ...[
-      if (assessment.captures.isEmpty)
-        const CompletionBlocker(
-          code: CompletionBlockerCode.acceptedCaptureRequired,
-          message: 'Accept at least one Capture before completing.',
-        ),
-      for (final finding in assessment.findings)
-        if (finding.reviewState == FindingReviewState.proposed &&
-            finding.reviewOutcome == null)
-          CompletionBlocker(
-            code: CompletionBlockerCode.unreviewedFinding,
-            message: 'Review Proposed Finding ${finding.id} before completing.',
-          ),
-      for (final finding in assessment.findings)
-        if (finding.reviewOutcome == FindingReviewOutcome.undetermined &&
-            finding.additionalViewRequests.isNotEmpty &&
-            (finding.additionalViewOverrideReason?.trim().isEmpty ?? true))
-          CompletionBlocker(
-            code: CompletionBlockerCode.findingEvidenceOverrideRequired,
-            message:
-                'Explain why the additional-view request for Finding ${finding.id} is being overridden.',
-          ),
-      if (assessment.estimate == null)
-        const CompletionBlocker(
-          code: CompletionBlockerCode.estimateReviewRequired,
-          message: 'Review the Assessment Estimate before completing.',
-        ),
-      if (assessment.estimate case final estimate?)
-        for (final finding in assessment.findings)
-          if (finding.reviewState == FindingReviewState.confirmed &&
-              !estimate.operations.any(
-                (operation) => operation.findingIds.contains(finding.id),
-              ))
-            CompletionBlocker(
-              code: CompletionBlockerCode.estimateFindingCoverageRequired,
-              message:
-                  'Review a Repair Operation or explicit missing pricing for Confirmed Finding ${finding.id}.',
-            ),
-      if (assessment.estimate != null)
-        for (final finding in assessment.findings)
-          if (finding.reviewState == FindingReviewState.confirmed &&
-              !assessment.isEstimateReviewCurrentFor(finding))
-            CompletionBlocker(
-              code: CompletionBlockerCode.estimateReviewRequired,
-              message:
-                  'Review the Assessment Estimate after changing Confirmed Finding ${finding.id}.',
-            ),
-      if (assessment.estimate case final estimate?
-          when estimate.isPartial &&
-              estimate.missingPricingAcknowledgedAt == null)
-        const CompletionBlocker(
-          code: CompletionBlockerCode.partialEstimateAcknowledgmentRequired,
-          message:
-              'Acknowledge the Partial Estimate\'s missing pricing before completing.',
-        ),
-      for (final finding in assessment.findings)
-        if (finding.reviewState == FindingReviewState.confirmed &&
-            !assessment.isSeverityReviewCurrentFor(finding))
-          CompletionBlocker(
-            code: CompletionBlockerCode.severityReviewRequired,
-            message:
-                'Review Severity for Confirmed Finding ${finding.id} before completing.',
-          ),
-      for (final severity in assessment.severityAssessments)
-        if (severity.followUpNeed != null &&
-            (severity.followUpOverrideReason?.trim().isEmpty ?? true))
-          CompletionBlocker(
-            code: CompletionBlockerCode.severityEvidenceOverrideRequired,
-            message:
-                'Explain why the Severity additional-view request for Finding ${severity.findingId} is being overridden.',
-          ),
-      if (!assessment.findings.any(
-        (finding) => finding.reviewState == FindingReviewState.confirmed,
-      ))
-        const CompletionBlocker(
-          code: CompletionBlockerCode.noVisibleDamageConfirmationRequired,
-          message:
-              'Confirm that no supported visible exterior damage was found.',
-        ),
-    ],
-  ]);
-
   void _emit(AssessmentCompletionState state) {
     _state = state;
     notifyListeners();
   }
 }
+
+List<CompletionBlocker> completionBlockersFor(
+  IntakeAssessment assessment,
+) => List.unmodifiable([
+  if (assessment.status != IntakeAssessmentStatus.draft)
+    ...const <CompletionBlocker>[]
+  else ...[
+    if (assessment.captures.isEmpty)
+      const CompletionBlocker(
+        code: CompletionBlockerCode.acceptedCaptureRequired,
+        message: 'Accept at least one Capture before completing.',
+      ),
+    for (final finding in assessment.findings)
+      if (finding.reviewState == FindingReviewState.proposed &&
+          finding.reviewOutcome == null)
+        CompletionBlocker(
+          code: CompletionBlockerCode.unreviewedFinding,
+          message: 'Review Proposed Finding ${finding.id} before completing.',
+        ),
+    for (final finding in assessment.findings)
+      if (finding.reviewOutcome == FindingReviewOutcome.undetermined &&
+          finding.additionalViewRequests.isNotEmpty &&
+          (finding.additionalViewOverrideReason?.trim().isEmpty ?? true))
+        CompletionBlocker(
+          code: CompletionBlockerCode.findingEvidenceOverrideRequired,
+          message:
+              'Explain why the additional-view request for Finding ${finding.id} is being overridden.',
+        ),
+    if (assessment.estimate == null)
+      const CompletionBlocker(
+        code: CompletionBlockerCode.estimateReviewRequired,
+        message: 'Review the Assessment Estimate before completing.',
+      ),
+    if (assessment.estimate case final estimate?)
+      for (final finding in assessment.findings)
+        if (finding.reviewState == FindingReviewState.confirmed &&
+            !estimate.operations.any(
+              (operation) => operation.findingIds.contains(finding.id),
+            ))
+          CompletionBlocker(
+            code: CompletionBlockerCode.estimateFindingCoverageRequired,
+            message:
+                'Review a Repair Operation or explicit missing pricing for Confirmed Finding ${finding.id}.',
+          ),
+    if (assessment.estimate != null)
+      for (final finding in assessment.findings)
+        if (finding.reviewState == FindingReviewState.confirmed &&
+            !assessment.isEstimateReviewCurrentFor(finding))
+          CompletionBlocker(
+            code: CompletionBlockerCode.estimateReviewRequired,
+            message:
+                'Review the Assessment Estimate after changing Confirmed Finding ${finding.id}.',
+          ),
+    if (assessment.estimate case final estimate?
+        when estimate.isPartial &&
+            estimate.missingPricingAcknowledgedAt == null)
+      const CompletionBlocker(
+        code: CompletionBlockerCode.partialEstimateAcknowledgmentRequired,
+        message:
+            'Acknowledge the Partial Estimate\'s missing pricing before completing.',
+      ),
+    for (final finding in assessment.findings)
+      if (finding.reviewState == FindingReviewState.confirmed &&
+          !assessment.isSeverityReviewCurrentFor(finding))
+        CompletionBlocker(
+          code: CompletionBlockerCode.severityReviewRequired,
+          message:
+              'Review Severity for Confirmed Finding ${finding.id} before completing.',
+        ),
+    for (final severity in assessment.severityAssessments)
+      if (severity.followUpNeed != null &&
+          (severity.followUpOverrideReason?.trim().isEmpty ?? true))
+        CompletionBlocker(
+          code: CompletionBlockerCode.severityEvidenceOverrideRequired,
+          message:
+              'Explain why the Severity additional-view request for Finding ${severity.findingId} is being overridden.',
+        ),
+    if (!assessment.findings.any(
+      (finding) => finding.reviewState == FindingReviewState.confirmed,
+    ))
+      const CompletionBlocker(
+        code: CompletionBlockerCode.noVisibleDamageConfirmationRequired,
+        message: 'Confirm that no supported visible exterior damage was found.',
+      ),
+  ],
+]);

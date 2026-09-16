@@ -6,8 +6,69 @@ import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'fail_next_assessment_save_repository.dart';
+
 void main() {
   group('AssessmentEstimateScreen', () {
+    testWidgets('price errors and save failure retain operation override', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(const [
+        SuggestedRepairOperation(
+          operationId: 'repair-door',
+          findingId: 'finding-1',
+          description: 'Repair left-front door',
+        ),
+      ]);
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('recalculate-estimate')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('override-repair-door')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('minimum-cents')), '10000');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('submit-estimate-action')));
+      await tester.pumpAndSettle();
+      expect(find.text('Maximum cents is required.'), findsOneWidget);
+      expect(find.text('Currency is required.'), findsOneWidget);
+      expect(find.text('Pricing source version is required.'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('maximum-cents')), '5000');
+      await tester.enterText(find.byKey(const Key('currency')), 'CAD');
+      await tester.enterText(
+        find.byKey(const Key('pricing-source-version')),
+        'appraiser-source-v1',
+      );
+      await tester.enterText(
+        find.byKey(const Key('override-reason')),
+        'Reviewed shop range.',
+      );
+      await tester.tap(find.byKey(const Key('submit-estimate-action')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Maximum cents must be at least minimum cents.'),
+        findsOneWidget,
+      );
+      expect(find.text('Override Repair Operation'), findsOneWidget);
+      expect(find.text('Reviewed shop range.'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('maximum-cents')), '20000');
+      harness.repository.failNextSave = true;
+      await tester.tap(find.byKey(const Key('submit-estimate-action')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Device storage is temporarily unavailable.'),
+        findsWidgets,
+      );
+      expect(find.text('Override Repair Operation'), findsOneWidget);
+      expect(find.text('10000'), findsOneWidget);
+      expect(find.text('Reviewed shop range.'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('submit-estimate-action')));
+      await tester.pumpAndSettle();
+      expect(find.text('Override Repair Operation'), findsNothing);
+      expect(find.text('CAD 100.00–200.00'), findsOneWidget);
+    });
     testWidgets(
       'Draft Estimate deduplicates shared work and labels unavailable pricing',
       (tester) async {
@@ -129,9 +190,10 @@ void main() {
 }
 
 class _Harness {
-  const _Harness(this.controller);
+  const _Harness(this.controller, this.repository);
 
   final AssessmentEstimateController controller;
+  final FailNextAssessmentSaveRepository repository;
 
   Widget get widget =>
       MaterialApp(home: AssessmentEstimateScreen(controller: controller));
@@ -139,7 +201,9 @@ class _Harness {
   static Future<_Harness> create(
     List<SuggestedRepairOperation> suggestions,
   ) async {
-    final repository = InMemoryAssessmentRepository();
+    final repository = FailNextAssessmentSaveRepository(
+      InMemoryAssessmentRepository(),
+    );
     await repository.save(_assessment());
     return _Harness(
       AssessmentEstimateController(
@@ -149,6 +213,7 @@ class _Harness {
         idGenerator: () => 'override-1',
         now: () => DateTime.utc(2026, 9, 7, 13),
       ),
+      repository,
     );
   }
 }

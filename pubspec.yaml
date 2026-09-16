@@ -23,6 +23,8 @@ dependencies:
   fpdart: ^1.2.0
   flutter_bloc: ^9.1.1
   share_plus: ^13.3.0
+  flutter_file_dialog: ^3.3.2
+  open_filex: ^4.7.0
 
   # ultralytics_yolo:
   #   path: ../

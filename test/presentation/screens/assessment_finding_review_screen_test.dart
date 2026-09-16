@@ -5,6 +5,8 @@ import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'fail_next_assessment_save_repository.dart';
+
 void main() {
   group('AssessmentFindingReviewScreen', () {
     testWidgets('Appraiser sees model evidence before reviewing a Finding', (
@@ -23,20 +25,14 @@ void main() {
       );
       expect(
         find.descendant(of: selectionRow, matching: find.byType(Text)),
-        findsNothing,
+        findsOneWidget,
       );
       final proposedStatus = find.byKey(
         const Key('status-proposed-observation-1'),
       );
-      final modelObservation = find.text('Model observation: dent');
-      expect(
-        tester.getTopLeft(proposedStatus).dx,
-        tester.getTopLeft(modelObservation).dx,
-      );
-      expect(
-        tester.getTopLeft(proposedStatus).dy,
-        lessThan(tester.getTopLeft(modelObservation).dy),
-      );
+      final modelObservation = find.text('Suggested dent • 80.0% confidence');
+      expect(proposedStatus, findsOneWidget);
+      expect(modelObservation, findsOneWidget);
       final firstCaptureImage = tester.widget<Image>(
         find.byKey(const Key('finding-observation-image-observation-1')),
       );
@@ -53,15 +49,9 @@ void main() {
         find.byKey(const Key('finding-thumbnail-bounds-observation-2')),
         findsOneWidget,
       );
-      expect(find.text('Model observation: dent'), findsOneWidget);
-      expect(find.text('80.0% confidence'), findsNWidgets(2));
-      expect(find.text('Camera still • Capture capture-1'), findsOneWidget);
+      expect(find.text('Camera still • photo capture-1'), findsOneWidget);
       expect(
-        find.text('Vehicle Component: Appraiser confirmation required'),
-        findsNWidgets(2),
-      );
-      expect(
-        find.text('Damage Type: Appraiser confirmation required'),
+        find.text('Component and damage type need Appraiser review.'),
         findsNWidgets(2),
       );
     });
@@ -124,10 +114,18 @@ void main() {
       expect(find.text('2 Proposed'), findsOneWidget);
       await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('vehicle-component')),
-        'left-front door',
+      expect(
+        find.byKey(const Key('dialog-evidence-proposed-observation-1')),
+        findsOneWidget,
       );
+      await tester.tap(
+        find.byKey(const Key('dialog-evidence-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      await tester.tap(find.byKey(const Key('close-model-evidence')));
+      await tester.pumpAndSettle();
+      await _selectComponent(tester, 'Vehicle Component', 'left-front door');
       await tester.enterText(find.byKey(const Key('damage-type')), 'dent');
       await tester.enterText(
         find.byKey(const Key('reason')),
@@ -149,12 +147,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('edit-proposed-observation-1')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('vehicle-component')),
-        'left-front fender',
-      );
+      await _selectComponent(tester, 'Vehicle Component', 'left-front fender');
       await tester.enterText(find.byKey(const Key('damage-type')), 'crease');
-      await tester.enterText(find.byKey(const Key('capture-ids')), 'capture-1');
       await tester.enterText(
         find.byKey(const Key('reason')),
         'Corrected values.',
@@ -180,12 +174,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('add-manual-finding')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('vehicle-component')),
-        'hood',
-      );
+      await _selectComponent(tester, 'Vehicle Component', 'hood');
       await tester.enterText(find.byKey(const Key('damage-type')), 'scratch');
-      await tester.enterText(find.byKey(const Key('capture-ids')), 'capture-1');
+      await _selectCapture(tester, 'capture-1');
       await tester.enterText(
         find.byKey(const Key('evidence-note')),
         'Scratch visible near the hood edge.',
@@ -257,10 +248,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const Key('merge-selected')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('vehicle-component')),
-        'left-front door',
-      );
+      await _selectComponent(tester, 'Vehicle Component', 'left-front door');
       await tester.enterText(
         find.byKey(const Key('damage-type')),
         'surface damage',
@@ -275,32 +263,30 @@ void main() {
 
       await tester.tap(find.byKey(const Key('split-generated-0')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('part-1-component')),
+      await _selectComponent(
+        tester,
+        'First Vehicle Component',
         'left-front door',
       );
       await tester.enterText(find.byKey(const Key('part-1-type')), 'dent');
-      await tester.enterText(
-        find.byKey(const Key('part-1-observations')),
+      await _selectObservation(
+        tester,
         'observation-1',
+        within: 'part-1-observations',
       );
-      await tester.enterText(
-        find.byKey(const Key('part-1-captures')),
-        'capture-1',
-      );
-      await tester.enterText(
-        find.byKey(const Key('part-2-component')),
+      await _selectCapture(tester, 'capture-1', within: 'part-1-captures');
+      await _selectComponent(
+        tester,
+        'Second Vehicle Component',
         'left-front door',
       );
       await tester.enterText(find.byKey(const Key('part-2-type')), 'scratch');
-      await tester.enterText(
-        find.byKey(const Key('part-2-observations')),
+      await _selectObservation(
+        tester,
         'observation-2',
+        within: 'part-2-observations',
       );
-      await tester.enterText(
-        find.byKey(const Key('part-2-captures')),
-        'capture-2',
-      );
+      await _selectCapture(tester, 'capture-2', within: 'part-2-captures');
       await tester.enterText(
         find.byKey(const Key('reason')),
         'Two separately reviewable areas.',
@@ -337,26 +323,17 @@ void main() {
           find.byKey(const Key('confirm-proposed-observation-1')),
         );
         await tester.pumpAndSettle();
-        await tester.enterText(
-          find.byKey(const Key('vehicle-component')),
-          'left-front door',
-        );
+        await _selectComponent(tester, 'Vehicle Component', 'left-front door');
         await tester.enterText(find.byKey(const Key('damage-type')), 'dent');
         await tester.enterText(find.byKey(const Key('reason')), 'Confirmed.');
         await tester.tap(find.byKey(const Key('submit-action')));
         await tester.pumpAndSettle();
-        expect(find.textContaining('override reason'), findsOneWidget);
-
-        await tester.tap(
-          find.byKey(const Key('confirm-proposed-observation-1')),
+        expect(
+          find.text('Additional-view override reason is required.'),
+          findsOneWidget,
         );
-        await tester.pumpAndSettle();
-        await tester.enterText(
-          find.byKey(const Key('vehicle-component')),
-          'left-front door',
-        );
-        await tester.enterText(find.byKey(const Key('damage-type')), 'dent');
-        await tester.enterText(find.byKey(const Key('reason')), 'Confirmed.');
+        expect(find.text('Confirm Finding'), findsOneWidget);
+        expect(find.text('Confirmed.'), findsOneWidget);
         await tester.enterText(
           find.byKey(const Key('override-reason')),
           'Another retained Capture shows the edge.',
@@ -366,20 +343,99 @@ void main() {
         expect(find.text('Confirmed'), findsOneWidget);
       },
     );
+
+    testWidgets('manual finding save failure retains input for retry', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('add-manual-finding')));
+      await tester.pumpAndSettle();
+      await _selectComponent(tester, 'Vehicle Component', 'hood');
+      await tester.enterText(find.byKey(const Key('damage-type')), 'scratch');
+      await _selectCapture(tester, 'capture-1');
+      await tester.enterText(
+        find.byKey(const Key('evidence-note')),
+        'Scratch visible near the edge.',
+      );
+      await tester.enterText(find.byKey(const Key('reason')), 'Manual review.');
+      harness.repository.failNextSave = true;
+      await tester.tap(find.byKey(const Key('submit-action')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Device storage is temporarily unavailable.'),
+        findsWidgets,
+      );
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Scratch visible near the edge.'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('submit-action')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      await tester.scrollUntilVisible(find.text('hood • scratch'), 300);
+      expect(find.text('hood • scratch'), findsOneWidget);
+    });
   });
+}
+
+Future<void> _selectComponent(
+  WidgetTester tester,
+  String label,
+  String component,
+) async {
+  final dropdown = find.byKey(Key('component-dropdown-$label'));
+  await tester.ensureVisible(dropdown);
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(component).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectCapture(
+  WidgetTester tester,
+  String captureId, {
+  String? within,
+}) async {
+  final choice = within == null
+      ? find.byKey(Key('evidence-choice-$captureId'))
+      : find.descendant(
+          of: find.byKey(Key(within)),
+          matching: find.byKey(Key('evidence-choice-$captureId')),
+        );
+  await tester.ensureVisible(choice);
+  await tester.tap(choice);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectObservation(
+  WidgetTester tester,
+  String observationId, {
+  String? within,
+}) async {
+  final choice = within == null
+      ? find.byKey(Key('observation-choice-$observationId'))
+      : find.descendant(
+          of: find.byKey(Key(within)),
+          matching: find.byKey(Key('observation-choice-$observationId')),
+        );
+  await tester.ensureVisible(choice);
+  await tester.tap(choice);
+  await tester.pumpAndSettle();
 }
 
 class _Harness {
   _Harness(this.repository, this.controller);
 
-  final InMemoryAssessmentRepository repository;
+  final FailNextAssessmentSaveRepository repository;
   final AssessmentFindingReviewController controller;
 
   Widget get widget =>
       MaterialApp(home: AssessmentFindingReviewScreen(controller: controller));
 
   static Future<_Harness> create() async {
-    final repository = InMemoryAssessmentRepository();
+    final repository = FailNextAssessmentSaveRepository(
+      InMemoryAssessmentRepository(),
+    );
     var assessment = IntakeAssessment.create(
       id: 'assessment-1',
       vehicle: const Vehicle(id: 'vehicle-1'),

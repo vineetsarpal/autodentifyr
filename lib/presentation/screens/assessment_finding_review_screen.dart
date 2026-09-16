@@ -4,11 +4,18 @@ import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_finding_review_controller.dart';
+import 'package:autodentifyr/presentation/widgets/assessment_evidence_selector.dart';
+import 'package:autodentifyr/presentation/widgets/vehicle_component_selector.dart';
 
 class AssessmentFindingReviewScreen extends StatefulWidget {
-  const AssessmentFindingReviewScreen({super.key, required this.controller});
+  const AssessmentFindingReviewScreen({
+    super.key,
+    required this.controller,
+    this.onContinue,
+  });
 
   final AssessmentFindingReviewController controller;
+  final VoidCallback? onContinue;
 
   @override
   State<AssessmentFindingReviewScreen> createState() =>
@@ -30,6 +37,28 @@ class _AssessmentFindingReviewScreenState
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Review findings')),
+    bottomNavigationBar: widget.onContinue == null
+        ? null
+        : SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListenableBuilder(
+                listenable: widget.controller,
+                builder: (context, _) {
+                  final state = widget.controller.state;
+                  return FilledButton(
+                    key: const Key('continue-assessment'),
+                    onPressed: state.phase == FindingReviewPhase.ready
+                        ? widget.onContinue
+                        : null,
+                    child: state.phase == FindingReviewPhase.saving
+                        ? const Text('Saving to device...')
+                        : const Text('Continue to severity'),
+                  );
+                },
+              ),
+            ),
+          ),
     body: SafeArea(
       child: ListenableBuilder(
         listenable: widget.controller,
@@ -142,30 +171,28 @@ class _AssessmentFindingReviewScreenState
                     }
                   }),
                 ),
+                Expanded(
+                  child: Text(
+                    _reviewLabel(finding),
+                    key: Key('status-${finding.id}'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (observations.length > 1)
+                  Text('${observations.length} views'),
               ],
             ),
-            const SizedBox(height: 4),
             if (finding.reviewState == FindingReviewState.proposed) ...[
               if (observations.isEmpty)
-                Text(_reviewLabel(finding), key: Key('status-${finding.id}')),
-              for (final (index, observation) in observations.indexed)
-                ..._buildObservationEvidence(
-                  assessment,
-                  observation,
-                  statusLabel: index == 0 ? _reviewLabel(finding) : null,
-                  statusKey: index == 0 ? Key('status-${finding.id}') : null,
-                ),
+                const Text('No model observation is available.'),
+              for (final observation in observations)
+                ..._buildObservationEvidence(assessment, observation),
               if (_hasAppraiserEdit(assessment, finding))
                 Text('${finding.vehicleComponent} • ${finding.damageType}')
               else ...[
-                const Text(
-                  'Vehicle Component: Appraiser confirmation required',
-                ),
-                const Text('Damage Type: Appraiser confirmation required'),
+                const Text('Component and damage type need Appraiser review.'),
               ],
             ] else ...[
-              Text(_reviewLabel(finding), key: Key('status-${finding.id}')),
-              const SizedBox(height: 4),
               Text(
                 finding.vehicleComponent == null || finding.damageType == null
                     ? 'Component and Damage Type not yet confirmed'
@@ -182,7 +209,7 @@ class _AssessmentFindingReviewScreenState
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton(
+                FilledButton(
                   key: Key('confirm-${finding.id}'),
                   onPressed: () => _confirm(finding),
                   child: const Text('Confirm'),
@@ -197,17 +224,17 @@ class _AssessmentFindingReviewScreenState
                   onPressed: () => _dismiss(finding),
                   child: const Text('Dismiss'),
                 ),
-                OutlinedButton(
+                TextButton(
                   key: Key('uncertainty-${finding.id}'),
                   onPressed: () => _recordUncertainty(finding),
                   child: const Text('Uncertainty'),
                 ),
-                OutlinedButton(
+                TextButton(
                   key: Key('undetermined-${finding.id}'),
                   onPressed: () => _markUndetermined(finding),
                   child: const Text('Undetermined'),
                 ),
-                OutlinedButton(
+                TextButton(
                   key: Key('split-${finding.id}'),
                   onPressed: () => _split(finding),
                   child: const Text('Split'),
@@ -249,7 +276,7 @@ class _AssessmentFindingReviewScreenState
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox.square(
-                      dimension: 96,
+                      dimension: 72,
                       child: _ObservationImageOverlay(
                         capture: capture,
                         observation: observation,
@@ -276,14 +303,12 @@ class _AssessmentFindingReviewScreenState
                   Text(statusLabel, key: statusKey),
                   const SizedBox(height: 4),
                 ],
-                Text('Model observation: ${observation.rawClass}'),
-                const SizedBox(height: 4),
                 Text(
-                  '${(observation.confidence * 100).toStringAsFixed(1)}% '
-                  'confidence',
+                  'Suggested ${observation.rawClass} • '
+                  '${(observation.confidence * 100).toStringAsFixed(1)}% confidence',
                 ),
                 const SizedBox(height: 4),
-                Text('$captureSource • Capture ${observation.captureId}'),
+                Text('$captureSource • photo ${observation.captureId}'),
               ],
             ),
           ),
@@ -332,8 +357,9 @@ class _AssessmentFindingReviewScreenState
   };
 
   Future<void> _confirm(DamageFinding finding) async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Confirm Finding',
+      finding: finding,
       fields: [
         _Field(
           'vehicleComponent',
@@ -354,10 +380,9 @@ class _AssessmentFindingReviewScreenState
           'override-reason',
         ),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      ConfirmFindingAction(
+      requiredFields: {'vehicleComponent', 'damageType', 'reason'},
+      overrideRequired: finding.additionalViewRequests.isNotEmpty,
+      actionFromValues: (values) => ConfirmFindingAction(
         findingId: finding.id,
         vehicleComponent: values['vehicleComponent']!,
         damageType: values['damageType']!,
@@ -368,8 +393,9 @@ class _AssessmentFindingReviewScreenState
   }
 
   Future<void> _edit(DamageFinding finding) async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Edit Finding',
+      finding: finding,
       fields: [
         _Field(
           'vehicleComponent',
@@ -391,10 +417,9 @@ class _AssessmentFindingReviewScreenState
         ),
         const _Field('reason', 'Reason', 'reason'),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      EditFindingAction(
+      requiredFields: {'vehicleComponent', 'damageType', 'captures', 'reason'},
+      overrideRequired: false,
+      actionFromValues: (values) => EditFindingAction(
         findingId: finding.id,
         vehicleComponent: values['vehicleComponent']!,
         damageType: values['damageType']!,
@@ -405,7 +430,7 @@ class _AssessmentFindingReviewScreenState
   }
 
   Future<void> _dismiss(DamageFinding finding) async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Dismiss Finding',
       fields: const [
         _Field('reason', 'Reason', 'reason'),
@@ -415,10 +440,9 @@ class _AssessmentFindingReviewScreenState
           'override-reason',
         ),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      DismissFindingAction(
+      requiredFields: {'reason'},
+      overrideRequired: finding.additionalViewRequests.isNotEmpty,
+      actionFromValues: (values) => DismissFindingAction(
         findingId: finding.id,
         reason: values['reason']!,
         additionalViewOverrideReason: _nullable(values['override']!),
@@ -427,7 +451,7 @@ class _AssessmentFindingReviewScreenState
   }
 
   Future<void> _addManual() async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Add manual Finding',
       fields: const [
         _Field('vehicleComponent', 'Vehicle Component', 'vehicle-component'),
@@ -437,10 +461,15 @@ class _AssessmentFindingReviewScreenState
         _Field('evidenceNote', 'Appraiser evidence note', 'evidence-note'),
         _Field('reason', 'Reason', 'reason'),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      AddManualFindingAction(
+      requiredFields: {
+        'vehicleComponent',
+        'damageType',
+        'captures',
+        'evidenceNote',
+        'reason',
+      },
+      overrideRequired: false,
+      actionFromValues: (values) => AddManualFindingAction(
         vehicleComponent: values['vehicleComponent']!,
         damageType: values['damageType']!,
         supportingCaptureIds: _csv(values['captures']!),
@@ -456,71 +485,115 @@ class _AssessmentFindingReviewScreenState
       text: finding.additionalViewRequests.join('\n'),
     );
     final reason = TextEditingController();
+    final formKey = GlobalKey<FormState>();
     var conflicting = finding.hasConflictingViews;
-    final action = await showDialog<RecordFindingUncertaintyAction>(
+    var saving = false;
+    String? saveError;
+    await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Record uncertainty'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CheckboxListTile(
-                  key: const Key('conflicting-views'),
-                  value: conflicting,
-                  onChanged: (value) =>
-                      setDialogState(() => conflicting = value ?? false),
-                  title: const Text('Conflicting views'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                TextField(
-                  key: const Key('additional-views'),
-                  controller: requests,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Specific additional-view requests',
-                  ),
-                ),
-                TextField(
-                  key: const Key('reason'),
-                  controller: reason,
-                  decoration: const InputDecoration(labelText: 'Reason'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              key: const Key('submit-action'),
-              onPressed: () => Navigator.pop(
-                context,
-                RecordFindingUncertaintyAction(
-                  findingId: finding.id,
-                  hasConflictingViews: conflicting,
-                  additionalViewRequests: requests.text
-                      .split('\n')
-                      .map((value) => value.trim())
-                      .where((value) => value.isNotEmpty)
-                      .toList(),
-                  reason: reason.text,
+        builder: (context, setDialogState) => PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            scrollable: true,
+            title: const Text('Record uncertainty'),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CheckboxListTile(
+                      key: const Key('conflicting-views'),
+                      value: conflicting,
+                      onChanged: (value) =>
+                          setDialogState(() => conflicting = value ?? false),
+                      title: const Text('Conflicting views'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    TextFormField(
+                      key: const Key('additional-views'),
+                      controller: requests,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Specific additional-view requests',
+                      ),
+                    ),
+                    TextFormField(
+                      key: const Key('reason'),
+                      controller: reason,
+                      minLines: 2,
+                      maxLines: 4,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      validator: (value) => (value?.trim().isEmpty ?? true)
+                          ? 'Reason is required.'
+                          : null,
+                      decoration: const InputDecoration(labelText: 'Reason *'),
+                    ),
+                    if (saveError != null)
+                      Text(
+                        saveError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              child: const Text('Save'),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const Key('submit-action'),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (!formKey.currentState!.validate()) return;
+                        setDialogState(() {
+                          saving = true;
+                          saveError = null;
+                        });
+                        await widget.controller.submit(
+                          RecordFindingUncertaintyAction(
+                            findingId: finding.id,
+                            hasConflictingViews: conflicting,
+                            additionalViewRequests: requests.text
+                                .split('\n')
+                                .map((value) => value.trim())
+                                .where((value) => value.isNotEmpty)
+                                .toList(),
+                            reason: reason.text,
+                          ),
+                        );
+                        if (!context.mounted) return;
+                        if (widget.controller.state.phase ==
+                            FindingReviewPhase.ready) {
+                          Navigator.pop(context);
+                        } else {
+                          setDialogState(() {
+                            saving = false;
+                            saveError =
+                                widget.controller.state.message ??
+                                'Unable to save uncertainty.';
+                          });
+                        }
+                      },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (action != null) await widget.controller.submit(action);
   }
 
   Future<void> _markUndetermined(DamageFinding finding) async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Mark Undetermined',
       fields: const [
         _Field('reason', 'Reason', 'reason'),
@@ -530,10 +603,9 @@ class _AssessmentFindingReviewScreenState
           'override-reason',
         ),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      MarkFindingUndeterminedAction(
+      requiredFields: {'reason'},
+      overrideRequired: false,
+      actionFromValues: (values) => MarkFindingUndeterminedAction(
         findingId: finding.id,
         reason: values['reason']!,
         additionalViewOverrideReason: _nullable(values['override']!),
@@ -542,7 +614,7 @@ class _AssessmentFindingReviewScreenState
   }
 
   Future<void> _mergeSelected() async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Merge Findings',
       fields: const [
         _Field('vehicleComponent', 'Vehicle Component', 'vehicle-component'),
@@ -554,10 +626,14 @@ class _AssessmentFindingReviewScreenState
           'override-reason',
         ),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      MergeFindingsAction(
+      requiredFields: {'vehicleComponent', 'damageType', 'reason'},
+      overrideRequired: _selectedFindingIds.any(
+        (id) => widget.controller.state.assessment!.findings.any(
+          (finding) =>
+              finding.id == id && finding.additionalViewRequests.isNotEmpty,
+        ),
+      ),
+      actionFromValues: (values) => MergeFindingsAction(
         findingIds: _selectedFindingIds.toList(),
         vehicleComponent: values['vehicleComponent']!,
         damageType: values['damageType']!,
@@ -571,7 +647,7 @@ class _AssessmentFindingReviewScreenState
   }
 
   Future<void> _split(DamageFinding finding) async {
-    final values = await _showFields(
+    await _showFields(
       title: 'Split Finding',
       fields: const [
         _Field('part1Component', 'First Vehicle Component', 'part-1-component'),
@@ -601,10 +677,17 @@ class _AssessmentFindingReviewScreenState
           'override-reason',
         ),
       ],
-    );
-    if (values == null) return;
-    await widget.controller.submit(
-      SplitFindingAction(
+      requiredFields: {
+        'part1Component',
+        'part1Type',
+        'part1Captures',
+        'part2Component',
+        'part2Type',
+        'part2Captures',
+        'reason',
+      },
+      overrideRequired: finding.additionalViewRequests.isNotEmpty,
+      actionFromValues: (values) => SplitFindingAction(
         findingId: finding.id,
         parts: [
           SplitFindingPart(
@@ -626,52 +709,235 @@ class _AssessmentFindingReviewScreenState
     );
   }
 
-  Future<Map<String, String>?> _showFields({
+  Future<void> _showFields({
     required String title,
+    DamageFinding? finding,
     required List<_Field> fields,
+    required Set<String> requiredFields,
+    required bool overrideRequired,
+    required FindingReviewAction Function(Map<String, String>) actionFromValues,
   }) async {
     final controllers = {
       for (final field in fields)
         field.name: TextEditingController(text: field.initial),
     };
-    final result = await showDialog<Map<String, String>>(
+    final assessment = widget.controller.state.assessment!;
+    final formKey = GlobalKey<FormState>();
+    String? saveError;
+    var saving = false;
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final field in fields)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: TextField(
-                    key: Key(field.keyName),
-                    controller: controllers[field.name],
-                    decoration: InputDecoration(labelText: field.label),
-                  ),
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            scrollable: true,
+            title: Text(title),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (finding != null) ...[
+                      _dialogEvidence(assessment, finding),
+                      const SizedBox(height: 12),
+                    ],
+                    for (final field in fields)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child:
+                            field.name == 'vehicleComponent' ||
+                                field.name.endsWith('Component')
+                            ? VehicleComponentSelector(
+                                key: Key(field.keyName),
+                                label: field.label,
+                                initialValue: field.initial,
+                                onChanged: (value) =>
+                                    controllers[field.name]!.text = value,
+                              )
+                            : field.name == 'captures' ||
+                                  field.name.endsWith('Captures')
+                            ? AssessmentEvidenceSelector(
+                                key: Key(field.keyName),
+                                label: field.label.replaceAll(' IDs', 's'),
+                                captures: assessment.captures,
+                                initialIds: _csv(field.initial),
+                                onChanged: (ids) =>
+                                    controllers[field.name]!.text = ids.join(
+                                      ', ',
+                                    ),
+                              )
+                            : field.name == 'observations' ||
+                                  field.name.endsWith('Observations')
+                            ? AssessmentObservationSelector(
+                                key: Key(field.keyName),
+                                label: field.label.replaceAll(' IDs', 's'),
+                                observations: assessment.observations,
+                                captures: assessment.captures,
+                                initialIds: _csv(field.initial),
+                                onChanged: (ids) =>
+                                    controllers[field.name]!.text = ids.join(
+                                      ', ',
+                                    ),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    requiredFields.contains(field.name) ||
+                                            (field.name == 'override' &&
+                                                overrideRequired)
+                                        ? '${field.label} *'
+                                        : field.label,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    key: Key(field.keyName),
+                                    controller: controllers[field.name],
+                                    minLines: _isNoteField(field.name) ? 2 : 1,
+                                    maxLines: _isNoteField(field.name) ? 4 : 1,
+                                    keyboardType: _isNoteField(field.name)
+                                        ? TextInputType.multiline
+                                        : TextInputType.text,
+                                    textInputAction: _isNoteField(field.name)
+                                        ? TextInputAction.newline
+                                        : TextInputAction.next,
+                                    validator: (value) =>
+                                        (requiredFields.contains(field.name) ||
+                                                (field.name == 'override' &&
+                                                    overrideRequired)) &&
+                                            (value?.trim().isEmpty ?? true)
+                                        ? '${field.label} is required.'
+                                        : null,
+                                    decoration: InputDecoration(
+                                      hintText: field.label,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    if (saveError != null)
+                      Text(
+                        saveError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const Key('submit-action'),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (!formKey.currentState!.validate()) return;
+                        setDialogState(() {
+                          saving = true;
+                          saveError = null;
+                        });
+                        await widget.controller.submit(
+                          actionFromValues({
+                            for (final entry in controllers.entries)
+                              entry.key: entry.value.text,
+                          }),
+                        );
+                        if (!dialogContext.mounted) return;
+                        if (widget.controller.state.phase ==
+                            FindingReviewPhase.ready) {
+                          Navigator.pop(dialogContext);
+                        } else {
+                          setDialogState(() {
+                            saving = false;
+                            saveError =
+                                widget.controller.state.message ??
+                                'Unable to save Finding.';
+                          });
+                        }
+                      },
+                child: const Text('Save'),
+              ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('submit-action'),
-            onPressed: () => Navigator.pop(context, {
-              for (final entry in controllers.entries)
-                entry.key: entry.value.text,
-            }),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
-    return result;
   }
+
+  Widget _dialogEvidence(IntakeAssessment assessment, DamageFinding finding) {
+    final observation = assessment.observations
+        .where((value) => finding.observationIds.contains(value.id))
+        .firstOrNull;
+    final capture = observation == null
+        ? assessment.captures
+              .where((value) => finding.supportingCaptureIds.contains(value.id))
+              .firstOrNull
+        : _captureById(assessment, observation.captureId);
+    if (capture == null) return const Text('No supporting photo is available.');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Supporting photo • tap to zoom'),
+        const SizedBox(height: 6),
+        InkWell(
+          key: Key('dialog-evidence-${finding.id}'),
+          onTap: () => observation == null
+              ? _showCaptureEvidence(capture)
+              : _showObservationEvidence(capture, observation),
+          child: SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: observation == null
+                ? Image.file(
+                    File(capture.localPath),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.image_not_supported_outlined),
+                  )
+                : _ObservationImageOverlay(
+                    capture: capture,
+                    observation: observation,
+                    imageKey: Key('dialog-evidence-image-${finding.id}'),
+                    boundsKey: Key('dialog-evidence-bounds-${finding.id}'),
+                    outlineColor: Theme.of(context).colorScheme.tertiary,
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showCaptureEvidence(Capture capture) =>
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Supporting photo')),
+            body: SafeArea(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 8,
+                child: Center(
+                  child: Image.file(
+                    File(capture.localPath),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _ObservationEvidenceViewer extends StatelessWidget {
@@ -829,6 +1095,9 @@ class _Field {
   final String keyName;
   final String initial;
 }
+
+bool _isNoteField(String name) =>
+    name == 'reason' || name == 'override' || name == 'evidenceNote';
 
 String? _nullable(String value) => value.trim().isEmpty ? null : value;
 

@@ -6,8 +6,123 @@ import 'package:autodentifyr/services/assessment_severity_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'fail_next_assessment_save_repository.dart';
+
 void main() {
   group('AssessmentSeverityScreen', () {
+    testWidgets(
+      'review notes remain multiline at large text on a narrow screen',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final harness = await _Harness.create(
+          const UnavailableSeveritySuggestionSource(),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+            home: AssessmentSeverityScreen(controller: harness.controller),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('review-severity-finding-1')),
+          200,
+        );
+        await tester.ensureVisible(
+          find.byKey(const Key('review-severity-finding-1')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('review-severity-finding-1')));
+        await tester.pumpAndSettle();
+
+        final reason = tester.widget<EditableText>(
+          find.descendant(
+            of: find.byKey(const Key('severity-reason')),
+            matching: find.byType(EditableText),
+          ),
+        );
+        expect(reason.minLines, 2);
+        expect(reason.maxLines, 4);
+        expect(find.text('Specific additional-view request *'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Undetermined validation and save failure retain entered review',
+      (tester) async {
+        final harness = await _Harness.create(
+          const UnavailableSeveritySuggestionSource(),
+        );
+        await tester.pumpWidget(harness.widget);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('review-severity-finding-1')));
+        await tester.pumpAndSettle();
+        final captureChoice = find.byKey(
+          const Key('evidence-choice-capture-1'),
+        );
+        expect(tester.widget<CheckboxListTile>(captureChoice).value, isTrue);
+        await tester.tap(captureChoice);
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(captureChoice).value, isFalse);
+        await tester.enterText(
+          find.byKey(const Key('severity-reason')),
+          'Evidence is inconclusive.',
+        );
+        await tester.enterText(
+          find.byKey(const Key('severity-uncertainty')),
+          'The lower edge is obscured.',
+        );
+        await tester.tap(find.byKey(const Key('submit-severity-review')));
+        await tester.pumpAndSettle();
+        expect(find.text('Evidence Captures is required.'), findsOneWidget);
+        expect(
+          find.text('Specific additional-view request is required.'),
+          findsOneWidget,
+        );
+        expect(find.text('Evidence is inconclusive.'), findsOneWidget);
+        expect(find.text('The lower edge is obscured.'), findsOneWidget);
+        expect(find.text('Review Severity Assessment'), findsOneWidget);
+
+        await tester.enterText(
+          find.byKey(const Key('severity-additional-view')),
+          'Capture an oblique lower-edge view.',
+        );
+        await tester.tap(captureChoice);
+        await tester.pumpAndSettle();
+        harness.repository.failNextSave = true;
+        await tester.tap(find.byKey(const Key('submit-severity-review')));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Device storage is temporarily unavailable.'),
+          findsWidgets,
+        );
+        expect(find.text('Review Severity Assessment'), findsOneWidget);
+        expect(find.text('Evidence is inconclusive.'), findsOneWidget);
+        expect(
+          find.text('Capture an oblique lower-edge view.'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byKey(const Key('submit-severity-review')));
+        await tester.pumpAndSettle();
+        expect(find.text('Review Severity Assessment'), findsNothing);
+        expect(
+          find.text(
+            'Appraiser conclusion: Undetermined — Evidence insufficient',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
     testWidgets(
       'unavailable automation leaves all four Appraiser outcomes available',
       (tester) async {
@@ -92,10 +207,12 @@ void main() {
         );
         expect(find.text('Suggestion evidence: capture-1'), findsOneWidget);
         expect(find.text('Reviewed by appraiser-1'), findsOneWidget);
-        expect(
-          find.text('Reviewed at 2026-09-07T17:00:00.000Z'),
-          findsOneWidget,
+        final reviewedAt = tester.widget<Text>(
+          find.textContaining('Reviewed at '),
         );
+        expect(reviewedAt.data, contains('Reviewed at '));
+        expect(reviewedAt.data, isNot(contains('2026-09-07T')));
+        expect(reviewedAt.data, isNot(contains('.000Z')));
         expect(
           find.text(
             'Reason: Visible damage is widespread across the component.',
@@ -171,9 +288,10 @@ class _SyntheticSeveritySuggestionSource implements SeveritySuggestionSource {
 }
 
 class _Harness {
-  const _Harness(this.controller);
+  const _Harness(this.controller, this.repository);
 
   final AssessmentSeverityController controller;
+  final FailNextAssessmentSaveRepository repository;
 
   Widget get widget =>
       MaterialApp(home: AssessmentSeverityScreen(controller: controller));
@@ -182,7 +300,9 @@ class _Harness {
     SeveritySuggestionSource source, {
     bool conflictingViews = false,
   }) async {
-    final repository = InMemoryAssessmentRepository();
+    final repository = FailNextAssessmentSaveRepository(
+      InMemoryAssessmentRepository(),
+    );
     await repository.save(_assessment(conflictingViews: conflictingViews));
     return _Harness(
       AssessmentSeverityController(
@@ -191,6 +311,7 @@ class _Harness {
         source: source,
         now: () => DateTime.utc(2026, 9, 7, 17),
       ),
+      repository,
     );
   }
 }
