@@ -123,9 +123,9 @@ void main() {
 
         final completed = controller.state.assessment!;
         expect(
-          AssessmentProgress.fromAssessment(completed).readyFor(
-            AssessmentStage.finalReview,
-          ),
+          AssessmentProgress.fromAssessment(
+            completed,
+          ).readyFor(AssessmentStage.finalReview),
           isTrue,
         );
         final revision = completed.completedRevisions.single;

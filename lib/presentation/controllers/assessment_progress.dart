@@ -42,8 +42,7 @@ class AssessmentProgress {
                 CompletionBlockerCode.estimateFindingCoverageRequired ||
             blocker.code ==
                 CompletionBlockerCode.partialEstimateAcknowledgmentRequired,
-      AssessmentStage.finalReview =>
-        true,
+      AssessmentStage.finalReview => true,
     };
   }).length;
 
