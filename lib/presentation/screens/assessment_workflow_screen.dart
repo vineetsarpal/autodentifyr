@@ -4,6 +4,7 @@ import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_workflow_controller.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_progress.dart';
+import 'package:autodentifyr/services/assessment_repository.dart';
 
 typedef AssessmentStageOpener =
     Future<void> Function(BuildContext context, String assessmentId);
@@ -481,6 +482,8 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
             return const Center(child: Text('Intake Assessment unavailable.'));
           }
           final editable = assessment.status == IntakeAssessmentStatus.draft;
+          final deleting =
+              controller.state.phase == AssessmentWorkflowPhase.deleting;
           final progress = AssessmentProgress.fromAssessment(assessment);
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -555,6 +558,18 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
+                key: const Key('delete-assessment'),
+                onPressed: deleting
+                    ? null
+                    : () => _deleteAssessment(context, assessment),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete assessment'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
                 onPressed: () async {
                   Navigator.pop(context);
                   await startAnother(assessment.vehicle);
@@ -568,6 +583,66 @@ class _AssessmentWorkspaceScreen extends StatelessWidget {
       ),
     ),
   );
+
+  Future<void> _deleteAssessment(
+    BuildContext context,
+    IntakeAssessment assessment,
+  ) async {
+    final status = _statusName(assessment.status);
+    final historical = assessment.status != IntakeAssessmentStatus.draft;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          historical ? 'Delete historical assessment?' : 'Delete assessment?',
+        ),
+        content: Text(
+          historical
+              ? 'Permanently delete the $status Intake Assessment for '
+                    '${_vehicleLabel(assessment.vehicle)}? This will permanently '
+                    'remove all completed revisions and audit history. This '
+                    'cannot be undone. Exported Reports and backups are '
+                    'unaffected.'
+              : 'Delete the Draft assessment for '
+                    '${_vehicleLabel(assessment.vehicle)}? Its history and '
+                    'device-local evidence will be permanently removed. '
+                    'Exported Reports and backups are unaffected.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('delete-cancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('delete-confirm'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            child: const Text('Delete assessment'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final result = await controller.deleteAssessment(assessmentId);
+    if (!context.mounted) return;
+    if (result is AssessmentDeleted) {
+      Navigator.pop(context);
+      return;
+    }
+    final message = result is AssessmentDeleteNotFound
+        ? 'This assessment was already deleted. The workspace has been refreshed.'
+        : result is AssessmentDeleteFailed
+        ? result.message
+        : 'Unable to delete the assessment.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   Widget _stage({
     required AssessmentStage stage,

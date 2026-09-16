@@ -26,4 +26,10 @@ class FailNextAssessmentSaveRepository implements AssessmentRepository {
 
   @override
   Future<List<IntakeAssessment>> list() => delegate.list();
+
+  @override
+  Future<AssessmentDeleteResult> delete(
+    String id, {
+    DateTime? expectedUpdatedAt,
+  }) => delegate.delete(id, expectedUpdatedAt: expectedUpdatedAt);
 }

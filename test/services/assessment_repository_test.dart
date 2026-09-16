@@ -626,6 +626,263 @@ void main() {
     });
 
     test(
+      'deletes a Draft and its managed evidence without touching another record',
+      () async {
+        final recordsDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-assessment-delete-',
+        );
+        final evidenceDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-evidence-delete-',
+        );
+        addTearDown(() => recordsDirectory.delete(recursive: true));
+        addTearDown(() => evidenceDirectory.delete(recursive: true));
+        final assessment = _draft().acceptCapture(_capture());
+        final other = IntakeAssessment.create(
+          id: 'assessment-2',
+          vehicle: const Vehicle(id: 'vehicle-2'),
+          appraiserProfile: const AppraiserProfile(
+            id: 'appraiser-1',
+            displayName: 'Alex Appraiser',
+          ),
+          createdAt: DateTime.utc(2026, 9, 6, 17),
+        );
+        final ownedEvidence = Directory(
+          '${evidenceDirectory.path}/${assessment.id}',
+        );
+        await ownedEvidence.create(recursive: true);
+        await File(
+          '${ownedEvidence.path}/capture-1.jpg',
+        ).writeAsString('image');
+        final repository = FileAssessmentRepository(
+          directory: recordsDirectory,
+          evidenceDirectory: evidenceDirectory,
+        );
+        await repository.save(assessment);
+        await repository.save(other);
+
+        final result = await repository.delete(
+          assessment.id,
+          expectedUpdatedAt: assessment.updatedAt,
+        );
+
+        expect(result, isA<AssessmentDeleted>());
+        expect(await repository.findById(assessment.id), isNull);
+        expect(await repository.findById(other.id), other);
+        expect(await ownedEvidence.exists(), isFalse);
+        expect(
+          await repository.delete(assessment.id),
+          isA<AssessmentDeleteNotFound>(),
+        );
+      },
+    );
+
+    test(
+      'deletes Completed and Voided records and their managed evidence',
+      () async {
+        for (final historical in [
+          _completedNoVisibleDamage(),
+          _completedNoVisibleDamage().voidAssessment(
+            voidedAt: DateTime.utc(2026, 9, 6, 18, 4),
+            reason: 'Duplicate intake record.',
+          ),
+        ]) {
+          final recordsDirectory = await Directory.systemTemp.createTemp(
+            'autodentifyr-assessment-historical-delete-',
+          );
+          final evidenceDirectory = await Directory.systemTemp.createTemp(
+            'autodentifyr-evidence-historical-delete-',
+          );
+          addTearDown(() => recordsDirectory.delete(recursive: true));
+          addTearDown(() => evidenceDirectory.delete(recursive: true));
+          final ownedEvidence = Directory(
+            '${evidenceDirectory.path}/${historical.id}',
+          );
+          await ownedEvidence.create(recursive: true);
+          await File(
+            '${ownedEvidence.path}/capture-1.jpg',
+          ).writeAsString('image');
+          final repository = FileAssessmentRepository(
+            directory: recordsDirectory,
+            evidenceDirectory: evidenceDirectory,
+          );
+          await repository.save(historical);
+
+          final result = await repository.delete(
+            historical.id,
+            expectedUpdatedAt: historical.updatedAt,
+          );
+
+          expect(result, isA<AssessmentDeleted>());
+          expect(await repository.findById(historical.id), isNull);
+          expect(await ownedEvidence.exists(), isFalse);
+        }
+      },
+    );
+
+    test(
+      'keeps a Voided record when historical evidence cleanup fails',
+      () async {
+        final recordsDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-assessment-voided-delete-failure-',
+        );
+        final evidenceDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-evidence-voided-delete-failure-',
+        );
+        addTearDown(() => recordsDirectory.delete(recursive: true));
+        addTearDown(() => evidenceDirectory.delete(recursive: true));
+        final voided = _completedNoVisibleDamage().voidAssessment(
+          voidedAt: DateTime.utc(2026, 9, 6, 18, 4),
+          reason: 'Duplicate intake record.',
+        );
+        final ownedEvidence = Directory(
+          '${evidenceDirectory.path}/${voided.id}',
+        );
+        await ownedEvidence.create(recursive: true);
+        final repository = FileAssessmentRepository(
+          directory: recordsDirectory,
+          evidenceDirectory: evidenceDirectory,
+          deleteEvidence: (_) async =>
+              throw const FileSystemException('Evidence cleanup unavailable'),
+        );
+        await repository.save(voided);
+
+        final result = await repository.delete(
+          voided.id,
+          expectedUpdatedAt: voided.updatedAt,
+        );
+
+        expect(result, isA<AssessmentDeleteFailed>());
+        expect(await repository.findById(voided.id), voided);
+        expect(await ownedEvidence.exists(), isTrue);
+      },
+    );
+
+    test(
+      'restores managed evidence and record when deletion persistence fails',
+      () async {
+        final recordsDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-assessment-delete-failure-',
+        );
+        final evidenceDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-evidence-delete-failure-',
+        );
+        addTearDown(() => recordsDirectory.delete(recursive: true));
+        addTearDown(() => evidenceDirectory.delete(recursive: true));
+        final assessment = _draft().acceptCapture(_capture());
+        final ownedEvidence = Directory(
+          '${evidenceDirectory.path}/${assessment.id}',
+        );
+        await ownedEvidence.create(recursive: true);
+        await File(
+          '${ownedEvidence.path}/capture-1.jpg',
+        ).writeAsString('image');
+        final readable = FileAssessmentRepository(
+          directory: recordsDirectory,
+          evidenceDirectory: evidenceDirectory,
+        );
+        await readable.save(assessment);
+        final failing = FileAssessmentRepository(
+          directory: recordsDirectory,
+          evidenceDirectory: evidenceDirectory,
+          writeStore: (_, _) async =>
+              throw const FileSystemException('Simulated full storage'),
+        );
+
+        final result = await failing.delete(
+          assessment.id,
+          expectedUpdatedAt: assessment.updatedAt,
+        );
+
+        expect(result, isA<AssessmentDeleteFailed>());
+        expect((result as AssessmentDeleteFailed).message, contains('storage'));
+        expect(await readable.findById(assessment.id), assessment);
+        expect(await ownedEvidence.exists(), isTrue);
+      },
+    );
+
+    test(
+      'reports managed evidence cleanup failures without deleting the record',
+      () async {
+        final recordsDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-assessment-delete-evidence-failure-',
+        );
+        final evidenceDirectory = await Directory.systemTemp.createTemp(
+          'autodentifyr-evidence-delete-evidence-failure-',
+        );
+        addTearDown(() => recordsDirectory.delete(recursive: true));
+        addTearDown(() => evidenceDirectory.delete(recursive: true));
+        final assessment = _draft();
+        await Directory(
+          '${evidenceDirectory.path}/${assessment.id}',
+        ).create(recursive: true);
+        final repository = FileAssessmentRepository(
+          directory: recordsDirectory,
+          evidenceDirectory: evidenceDirectory,
+          deleteEvidence: (_) async =>
+              throw const FileSystemException('Evidence cleanup unavailable'),
+        );
+        await repository.save(assessment);
+
+        final result = await repository.delete(assessment.id);
+
+        expect(result, isA<AssessmentDeleteFailed>());
+        expect(await repository.findById(assessment.id), assessment);
+        expect(
+          await Directory(
+            '${evidenceDirectory.path}/${assessment.id}',
+          ).exists(),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'deletes Completed and Voided assessments with their history',
+      () async {
+        final repository = InMemoryAssessmentRepository();
+        final completed = _completedNoVisibleDamage();
+        await repository.save(completed);
+        final completedResult = await repository.delete(
+          completed.id,
+          expectedUpdatedAt: completed.updatedAt,
+        );
+
+        final voided = _completedNoVisibleDamage().voidAssessment(
+          voidedAt: DateTime.utc(2026, 9, 6, 18, 4),
+          reason: 'Duplicate intake record.',
+        );
+        await repository.save(voided);
+        final voidedResult = await repository.delete(
+          voided.id,
+          expectedUpdatedAt: voided.updatedAt,
+        );
+
+        expect(completedResult, isA<AssessmentDeleted>());
+        expect(voidedResult, isA<AssessmentDeleted>());
+        expect(await repository.findById(completed.id), isNull);
+        expect(await repository.findById(voided.id), isNull);
+      },
+    );
+
+    test('preserves a historical record when deletion is stale', () async {
+      final repository = InMemoryAssessmentRepository();
+      final completed = _completedNoVisibleDamage();
+      await repository.save(completed);
+
+      final result = await repository.delete(
+        completed.id,
+        expectedUpdatedAt: completed.updatedAt.add(const Duration(seconds: 1)),
+      );
+
+      expect(result, isA<AssessmentDeleteFailed>());
+      expect((result as AssessmentDeleteFailed).message, contains('changed'));
+      expect(
+        (await repository.findById(completed.id))!.completedRevisions,
+        completed.completedRevisions,
+      );
+    });
+
+    test(
       'rejects a stale save instead of erasing a completed revision',
       () async {
         final directory = await Directory.systemTemp.createTemp(

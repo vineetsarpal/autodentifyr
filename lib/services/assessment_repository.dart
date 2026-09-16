@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 
 typedef AssessmentStoreWriter =
     Future<void> Function(File temporaryFile, String contents);
+typedef AssessmentEvidenceDirectoryDeleter =
+    Future<void> Function(Directory directory);
 
 abstract interface class AssessmentRepository {
   Future<SaveAssessmentResult> save(
@@ -17,12 +19,20 @@ abstract interface class AssessmentRepository {
   Future<IntakeAssessment?> findById(String id);
 
   Future<List<IntakeAssessment>> list();
+
+  Future<AssessmentDeleteResult> delete(
+    String id, {
+    DateTime? expectedUpdatedAt,
+  });
 }
 
 Future<FileAssessmentRepository> openDeviceLocalAssessmentRepository() async {
   final supportDirectory = await getApplicationSupportDirectory();
   return FileAssessmentRepository(
     directory: Directory('${supportDirectory.path}/assessment_records'),
+    evidenceDirectory: Directory(
+      '${supportDirectory.path}/assessment_evidence',
+    ),
   );
 }
 
@@ -47,15 +57,23 @@ class FileAssessmentRepository implements AssessmentRepository {
   FileAssessmentRepository({
     required Directory directory,
     this.fileName = 'assessments.json',
+    Directory? evidenceDirectory,
     AssessmentStoreWriter? writeStore,
+    AssessmentEvidenceDirectoryDeleter? deleteEvidence,
   }) : _directory = directory,
-       _writeStore = writeStore ?? _writeStoreFile;
+       _evidenceDirectory =
+           evidenceDirectory ??
+           Directory('${directory.absolute.parent.path}/assessment_evidence'),
+       _writeStore = writeStore ?? _writeStoreFile,
+       _deleteEvidence = deleteEvidence ?? _deleteEvidenceDirectory;
 
   static const currentSchemaVersion = 10;
 
   final Directory _directory;
+  final Directory _evidenceDirectory;
   final String fileName;
   final AssessmentStoreWriter _writeStore;
+  final AssessmentEvidenceDirectoryDeleter _deleteEvidence;
   Future<void> _pendingSave = Future.value();
 
   File get _storeFile => File('${_directory.path}/$fileName');
@@ -100,6 +118,115 @@ class FileAssessmentRepository implements AssessmentRepository {
     final assessments = (await _readAll()).values.toList();
     assessments.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return List.unmodifiable(assessments);
+  }
+
+  @override
+  Future<AssessmentDeleteResult> delete(
+    String id, {
+    DateTime? expectedUpdatedAt,
+  }) async {
+    final previousSave = _pendingSave;
+    final completion = Completer<void>();
+    _pendingSave = completion.future;
+    await previousSave;
+
+    Directory? quarantinedEvidence;
+    try {
+      if (!_isSafeAssessmentId(id)) {
+        return const AssessmentDeleteFailed(
+          message: 'The assessment identifier is invalid.',
+          retryable: false,
+        );
+      }
+      final assessments = await _readAll();
+      final assessment = assessments[id];
+      if (assessment == null) return const AssessmentDeleteNotFound();
+      if (expectedUpdatedAt != null &&
+          assessment.updatedAt != expectedUpdatedAt) {
+        return const AssessmentDeleteFailed(
+          message:
+              'The Intake Assessment changed in another session. Reload it before deleting.',
+        );
+      }
+
+      final evidenceDirectory = _evidenceDirectoryFor(id);
+      if (await evidenceDirectory.exists()) {
+        quarantinedEvidence = Directory(
+          '${evidenceDirectory.path}.deleting-${DateTime.now().microsecondsSinceEpoch}',
+        );
+        await evidenceDirectory.rename(quarantinedEvidence.path);
+      }
+
+      assessments.remove(id);
+      try {
+        await _commit(assessments.values);
+      } catch (error) {
+        await _restoreQuarantinedEvidence(
+          quarantinedEvidence,
+          evidenceDirectory,
+        );
+        quarantinedEvidence = null;
+        rethrow;
+      }
+
+      if (quarantinedEvidence != null) {
+        try {
+          await _deleteEvidence(quarantinedEvidence);
+        } on Object catch (error) {
+          assessments[id] = assessment;
+          try {
+            await _commit(assessments.values);
+            await _restoreQuarantinedEvidence(
+              quarantinedEvidence,
+              evidenceDirectory,
+            );
+            quarantinedEvidence = null;
+          } on Object catch (rollbackError) {
+            return AssessmentDeleteFailed(
+              message:
+                  'The assessment could not be fully deleted: evidence cleanup failed (${_errorMessage(error)}) and restoring the assessment also failed (${_errorMessage(rollbackError)}).',
+            );
+          }
+          return AssessmentDeleteFailed(
+            message:
+                'Deletion was not completed because managed evidence could not be cleaned up: ${_errorMessage(error)}',
+          );
+        }
+      }
+      return const AssessmentDeleted();
+    } on FileSystemException catch (error) {
+      return AssessmentDeleteFailed(message: error.message);
+    } on FormatException catch (error) {
+      return AssessmentDeleteFailed(message: error.message, retryable: false);
+    } on Object catch (error) {
+      return AssessmentDeleteFailed(message: error.toString());
+    } finally {
+      completion.complete();
+    }
+  }
+
+  Directory _evidenceDirectoryFor(String id) =>
+      Directory('${_evidenceDirectory.absolute.path}/$id');
+
+  static bool _isSafeAssessmentId(String value) =>
+      RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(value);
+
+  static Future<void> _deleteEvidenceDirectory(Directory directory) =>
+      directory.delete(recursive: true);
+
+  static String _errorMessage(Object error) =>
+      error is FileSystemException ? error.message : error.toString();
+
+  Future<void> _restoreQuarantinedEvidence(
+    Directory? quarantined,
+    Directory? destination,
+  ) async {
+    if (quarantined == null || destination == null) return;
+    if (!await quarantined.exists()) return;
+    if (await destination.exists()) {
+      await destination.delete(recursive: true);
+    }
+    await quarantined.rename(destination.path);
   }
 
   Future<Map<String, IntakeAssessment>> _readAll() async {
@@ -359,6 +486,43 @@ class InMemoryAssessmentRepository implements AssessmentRepository {
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return List.unmodifiable(assessments);
   }
+
+  @override
+  Future<AssessmentDeleteResult> delete(
+    String id, {
+    DateTime? expectedUpdatedAt,
+  }) async {
+    final assessment = _assessments[id];
+    if (assessment == null) return const AssessmentDeleteNotFound();
+    if (expectedUpdatedAt != null &&
+        assessment.updatedAt != expectedUpdatedAt) {
+      return const AssessmentDeleteFailed(
+        message:
+            'The Intake Assessment changed in another session. Reload it before deleting.',
+      );
+    }
+    _assessments.remove(id);
+    return const AssessmentDeleted();
+  }
+}
+
+sealed class AssessmentDeleteResult {
+  const AssessmentDeleteResult();
+}
+
+class AssessmentDeleted extends AssessmentDeleteResult {
+  const AssessmentDeleted();
+}
+
+class AssessmentDeleteNotFound extends AssessmentDeleteResult {
+  const AssessmentDeleteNotFound();
+}
+
+class AssessmentDeleteFailed extends AssessmentDeleteResult {
+  const AssessmentDeleteFailed({required this.message, this.retryable = true});
+
+  final String message;
+  final bool retryable;
 }
 
 AssessmentSaveFailed? _saveConflict({

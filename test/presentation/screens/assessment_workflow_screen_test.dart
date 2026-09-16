@@ -295,5 +295,192 @@ void main() {
         expect(find.byKey(const Key('open-evidence')), findsOneWidget);
       },
     );
+
+    testWidgets('cancels deletion safely and deletes after confirmation', (
+      tester,
+    ) async {
+      final repository = InMemoryAssessmentRepository();
+      await repository.save(
+        IntakeAssessment.create(
+          id: 'assessment-delete',
+          vehicle: const Vehicle(
+            id: 'vehicle-delete',
+            displayLabel: 'Blue hatchback',
+          ),
+          appraiserProfile: const AppraiserProfile(
+            id: 'appraiser-delete',
+            displayName: 'Alex Appraiser',
+          ),
+          createdAt: DateTime.utc(2026, 9, 16),
+        ),
+      );
+      final controller = AssessmentWorkflowController(
+        repository: repository,
+        idGenerator: () => 'unused',
+        now: () => DateTime.utc(2026, 9, 16),
+      );
+      Future<void> noop(BuildContext context, String id) async {}
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AssessmentWorkflowScreen(
+            controller: controller,
+            openEvidence: noop,
+            openFindings: noop,
+            openEstimate: noop,
+            openSeverity: noop,
+            openCompletion: noop,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('assessment-assessment-delete')),
+      );
+      await tester.tap(find.byKey(const Key('assessment-assessment-delete')));
+      await tester.pumpAndSettle();
+      expect(find.text('Blue hatchback'), findsOneWidget);
+      expect(find.text('Intake Assessment unavailable.'), findsNothing);
+      await tester.drag(find.byType(ListView).last, const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('delete-assessment')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('delete-assessment')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.textContaining('Delete the Draft assessment'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Exported Reports and backups are unaffected.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('delete-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('delete-assessment')), findsOneWidget);
+      expect(await repository.findById('assessment-delete'), isNotNull);
+
+      await tester.tap(find.byKey(const Key('delete-assessment')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('delete-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(await repository.findById('assessment-delete'), isNull);
+      expect(find.text('Blue hatchback'), findsNothing);
+      expect(
+        find.text('No device-local Intake Assessments yet.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+      'offers deliberate historical deletion warnings for Completed and Voided records',
+      (tester) async {
+        final historicalRecords = [
+          _completed('assessment-completed'),
+          _completed('assessment-voided').voidAssessment(
+            voidedAt: DateTime.utc(2026, 9, 16, 1),
+            reason: 'Duplicate intake record.',
+          ),
+        ];
+        final repository = InMemoryAssessmentRepository();
+        for (final historical in historicalRecords) {
+          await repository.save(historical);
+        }
+        final controller = AssessmentWorkflowController(
+          repository: repository,
+          idGenerator: () => 'unused',
+          now: () => DateTime.utc(2026, 9, 16),
+        );
+        Future<void> noop(BuildContext context, String id) async {}
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AssessmentWorkflowScreen(
+              controller: controller,
+              openEvidence: noop,
+              openFindings: noop,
+              openEstimate: noop,
+              openSeverity: noop,
+              openCompletion: noop,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        for (final historical in historicalRecords) {
+          await tester.tap(find.byKey(Key('assessment-${historical.id}')));
+          await tester.pumpAndSettle();
+          await tester.drag(find.byType(ListView), const Offset(0, -500));
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(
+            find.byKey(const Key('delete-assessment')),
+          );
+          await tester.tap(find.byKey(const Key('delete-assessment')));
+          await tester.pumpAndSettle();
+
+          expect(find.text('Delete historical assessment?'), findsOneWidget);
+          expect(
+            find.textContaining(
+              'Permanently delete the ${historical.status == IntakeAssessmentStatus.completed ? 'Completed' : 'Voided'} Intake Assessment for',
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.textContaining('all completed revisions and audit history'),
+            findsOneWidget,
+          );
+          expect(
+            find.textContaining('Exported Reports and backups are unaffected.'),
+            findsOneWidget,
+          );
+          await tester.tap(find.byKey(const Key('delete-cancel')));
+          await tester.pumpAndSettle();
+          expect(await repository.findById(historical.id), historical);
+
+          await tester.tap(find.byKey(const Key('delete-assessment')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('delete-confirm')));
+          await tester.pumpAndSettle();
+          expect(await repository.findById(historical.id), isNull);
+        }
+      },
+    );
   });
 }
+
+IntakeAssessment _completed(String id) =>
+    IntakeAssessment.create(
+          id: id,
+          vehicle: const Vehicle(
+            id: 'vehicle-historical',
+            displayLabel: 'Blue hatchback',
+          ),
+          appraiserProfile: const AppraiserProfile(
+            id: 'appraiser-historical',
+            displayName: 'Alex Appraiser',
+          ),
+          createdAt: DateTime.utc(2026, 9, 16),
+        )
+        .acceptCapture(
+          Capture(
+            id: 'capture-historical',
+            source: CaptureSource.import,
+            localPath: '/evidence/capture-historical.jpg',
+            acceptedByProfileId: 'appraiser-historical',
+            acceptedAt: DateTime.utc(2026, 9, 16, 0, 1),
+          ),
+        )
+        .recordEstimate(
+          AssessmentEstimate(
+            operations: [],
+            assumptions: ['Only visible exterior damage was assessed.'],
+            reviewedByProfileId: 'appraiser-historical',
+            reviewedAt: DateTime.utc(2026, 9, 16, 0, 2),
+            sourceVersion: 'unsupported-pricing-v1',
+          ),
+        )
+        .complete(
+          revisionId: 'revision-historical',
+          completedAt: DateTime.utc(2026, 9, 16, 0, 3),
+          noVisibleDamageConfirmed: true,
+        );

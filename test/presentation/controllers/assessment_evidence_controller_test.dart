@@ -447,6 +447,12 @@ class _FailOnceAssessmentRepository implements AssessmentRepository {
   Future<List<IntakeAssessment>> list() => delegate.list();
 
   @override
+  Future<AssessmentDeleteResult> delete(
+    String id, {
+    DateTime? expectedUpdatedAt,
+  }) => delegate.delete(id, expectedUpdatedAt: expectedUpdatedAt);
+
+  @override
   Future<SaveAssessmentResult> save(
     IntakeAssessment assessment, {
     DateTime? expectedUpdatedAt,
@@ -468,6 +474,12 @@ class _ReadFailingAssessmentRepository implements AssessmentRepository {
 
   @override
   Future<List<IntakeAssessment>> list() => Future.value(const []);
+
+  @override
+  Future<AssessmentDeleteResult> delete(
+    String id, {
+    DateTime? expectedUpdatedAt,
+  }) => Future.value(const AssessmentDeleteNotFound());
 
   @override
   Future<SaveAssessmentResult> save(

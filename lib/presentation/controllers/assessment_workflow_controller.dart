@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 
-enum AssessmentWorkflowPhase { idle, loading, ready, saving, failed }
+enum AssessmentWorkflowPhase { idle, loading, ready, saving, deleting, failed }
 
 class AssessmentWorkflowState {
   const AssessmentWorkflowState({
@@ -125,6 +125,58 @@ class AssessmentWorkflowController extends ChangeNotifier {
         ),
       );
       return null;
+    }
+  }
+
+  Future<AssessmentDeleteResult> deleteAssessment(String assessmentId) async {
+    final assessment = _state.assessments
+        .where((value) => value.id == assessmentId)
+        .firstOrNull;
+    if (assessment == null) {
+      return const AssessmentDeleteNotFound();
+    }
+    _emit(
+      AssessmentWorkflowState(
+        phase: AssessmentWorkflowPhase.deleting,
+        assessments: _state.assessments,
+      ),
+    );
+    try {
+      final result = await _repository.delete(
+        assessmentId,
+        expectedUpdatedAt: assessment.updatedAt,
+      );
+      if (result is AssessmentDeleted) {
+        _emit(
+          AssessmentWorkflowState(
+            phase: AssessmentWorkflowPhase.ready,
+            assessments: _state.assessments
+                .where((value) => value.id != assessmentId)
+                .toList(),
+          ),
+        );
+      } else if (result is AssessmentDeleteNotFound) {
+        await load();
+      } else if (result is AssessmentDeleteFailed) {
+        _emit(
+          AssessmentWorkflowState(
+            phase: AssessmentWorkflowPhase.failed,
+            assessments: _state.assessments,
+            message: result.message,
+          ),
+        );
+      }
+      return result;
+    } catch (error) {
+      final result = AssessmentDeleteFailed(message: error.toString());
+      _emit(
+        AssessmentWorkflowState(
+          phase: AssessmentWorkflowPhase.failed,
+          assessments: _state.assessments,
+          message: result.message,
+        ),
+      );
+      return result;
     }
   }
 
