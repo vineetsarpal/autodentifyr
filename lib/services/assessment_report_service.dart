@@ -151,7 +151,7 @@ class AssessmentReportService {
               ? ['None']
               : [
                   for (final finding in revision.confirmedFindings)
-                    '${finding.vehicleComponent} - ${finding.damageType}; photos ${finding.supportingCaptureIds.join(', ')}${finding.manualEvidenceNote == null ? '' : '; Appraiser note: ${finding.manualEvidenceNote}'}',
+                    '${finding.vehicleComponent.label} - ${finding.damageType}; photos ${finding.supportingCaptureIds.join(', ')}${finding.manualEvidenceNote == null ? '' : '; Appraiser note: ${finding.manualEvidenceNote}'}',
                 ],
         ),
         _estimateSection(revision.estimate),
@@ -189,7 +189,7 @@ class AssessmentReportService {
           heading: 'Finding identities',
           lines: [
             for (final finding in revision.confirmedFindings)
-              '${finding.vehicleComponent} - ${finding.damageType}: Finding ${finding.id}; observations ${finding.observationIds.join(', ')}',
+              '${finding.vehicleComponent.label} - ${finding.damageType}: Finding ${finding.id}; component ${finding.vehicleComponent.id.wireValue}; observations ${finding.observationIds.join(', ')}',
           ],
         ),
         AssessmentReportSection(
@@ -198,7 +198,7 @@ class AssessmentReportService {
               ? ['No Assessment Corrections recorded.']
               : [
                   for (final correction in revision.corrections)
-                    '${correction.id}: ${correction.kind.name}; Finding ${correction.findingId}; by ${correction.authorProfileId} at ${_time(correction.occurredAt)}; reason: ${correction.reason}; originals ${correction.originals.map((value) => value.id).join(', ')}; replacements ${correction.replacements.map((value) => value.id).join(', ')}',
+                    '${correction.id}: ${correction.kind.name}; Finding ${correction.findingId}; by ${correction.authorProfileId} at ${_time(correction.occurredAt)}; reason: ${correction.reason}; originals ${correction.originals.map(_correctionFindingIdentity).join(', ')}; replacements ${correction.replacements.map(_correctionFindingIdentity).join(', ')}',
                 ],
         ),
       ],
@@ -261,6 +261,9 @@ class AssessmentReportService {
     SeverityLevel.severe => 'Severe',
     SeverityLevel.undetermined => 'Undetermined',
   };
+
+  String _correctionFindingIdentity(DamageFinding finding) =>
+      '${finding.id} (${finding.vehicleComponentId?.wireValue ?? 'unassigned'})';
 
   String _time(DateTime value) => value.toUtc().toIso8601String();
 }

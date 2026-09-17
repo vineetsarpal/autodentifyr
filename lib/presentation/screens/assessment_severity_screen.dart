@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_severity_controller.dart';
 import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 import 'package:autodentifyr/services/assessment_severity_source.dart';
@@ -132,7 +133,7 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${finding.vehicleComponent} • ${finding.damageType}',
+              '${_componentLabel(finding.vehicleComponentId)} • ${finding.damageType}',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (finding.hasConflictingViews) const Text('Conflicting captures'),
@@ -227,6 +228,10 @@ class _AssessmentSeverityScreenState extends State<AssessmentSeverityScreen> {
     SeverityLevel.undetermined => 'Evidence insufficient',
   };
 }
+
+String _componentLabel(VehicleComponentId? id) => id == null
+    ? 'Component not selected'
+    : VehicleComponentCatalog.byId(id).label;
 
 class _SeverityReviewDialog extends StatefulWidget {
   const _SeverityReviewDialog({

@@ -46,6 +46,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/vehicle_components/
     - assets/models/
     - assets/app_icon.png
 

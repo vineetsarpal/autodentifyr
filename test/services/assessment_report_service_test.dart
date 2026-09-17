@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/services/assessment_report_service.dart';
 import 'package:image/image.dart' as img;
 import 'package:flutter_test/flutter_test.dart';
@@ -177,7 +178,7 @@ IntakeAssessment _reportReadyAssessment({String? capturePath}) {
         supportingCaptureIds: const ['capture-1'],
       ).reviewed(
         state: FindingReviewState.confirmed,
-        vehicleComponent: 'left-front-door',
+        vehicleComponentId: VehicleComponentId.leftFrontDoor,
         damageType: 'dent',
       );
   final assessment =

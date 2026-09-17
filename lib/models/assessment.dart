@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:autodentifyr/models/vehicle_component.dart';
+
 enum IntakeAssessmentStatus { draft, completed, voided }
 
 enum CaptureSource { camera, import }
@@ -270,7 +272,7 @@ class DamageFinding {
     required this.reviewState,
     required this.observationIds,
     required this.supportingCaptureIds,
-    this.vehicleComponent,
+    this.vehicleComponentId,
     this.damageType,
     this.manualEvidenceNote,
     this.hasConflictingViews = false,
@@ -283,25 +285,25 @@ class DamageFinding {
     required String id,
     required List<String> observationIds,
     required List<String> supportingCaptureIds,
-    String? suggestedVehicleComponent,
+    VehicleComponentId? suggestedVehicleComponentId,
     String? suggestedDamageType,
   }) => DamageFinding._(
     id: id,
     reviewState: FindingReviewState.proposed,
     observationIds: List.unmodifiable(observationIds),
     supportingCaptureIds: List.unmodifiable(supportingCaptureIds),
-    vehicleComponent: suggestedVehicleComponent,
+    vehicleComponentId: suggestedVehicleComponentId,
     damageType: suggestedDamageType,
   );
 
   factory DamageFinding.manual({
     required String id,
-    required String vehicleComponent,
+    required VehicleComponentId vehicleComponentId,
     required String damageType,
     required List<String> supportingCaptureIds,
     required String evidenceNote,
   }) {
-    if (vehicleComponent.trim().isEmpty || damageType.trim().isEmpty) {
+    if (damageType.trim().isEmpty) {
       throw const AssessmentInvariantViolation(
         'A Confirmed Finding requires a Vehicle Component and Damage Type.',
       );
@@ -316,7 +318,7 @@ class DamageFinding {
       reviewState: FindingReviewState.confirmed,
       observationIds: const [],
       supportingCaptureIds: List.unmodifiable(supportingCaptureIds),
-      vehicleComponent: vehicleComponent,
+      vehicleComponentId: vehicleComponentId,
       damageType: damageType,
       manualEvidenceNote: evidenceNote,
     );
@@ -326,7 +328,7 @@ class DamageFinding {
   final FindingReviewState reviewState;
   final List<String> observationIds;
   final List<String> supportingCaptureIds;
-  final String? vehicleComponent;
+  final VehicleComponentId? vehicleComponentId;
   final String? damageType;
   final String? manualEvidenceNote;
   final bool hasConflictingViews;
@@ -336,7 +338,7 @@ class DamageFinding {
 
   DamageFinding reviewed({
     required FindingReviewState state,
-    String? vehicleComponent,
+    VehicleComponentId? vehicleComponentId,
     String? damageType,
     String? additionalViewOverrideReason,
   }) {
@@ -345,10 +347,10 @@ class DamageFinding {
         'A review cannot return a Finding to Proposed.',
       );
     }
-    final reviewedComponent = vehicleComponent ?? this.vehicleComponent;
+    final reviewedComponent = vehicleComponentId ?? this.vehicleComponentId;
     final reviewedDamageType = damageType ?? this.damageType;
     if (state == FindingReviewState.confirmed &&
-        ((reviewedComponent?.trim().isEmpty ?? true) ||
+        (reviewedComponent == null ||
             (reviewedDamageType?.trim().isEmpty ?? true))) {
       throw const AssessmentInvariantViolation(
         'A Confirmed Finding requires a Vehicle Component and Damage Type.',
@@ -366,7 +368,7 @@ class DamageFinding {
       reviewState: state,
       observationIds: observationIds,
       supportingCaptureIds: supportingCaptureIds,
-      vehicleComponent: reviewedComponent,
+      vehicleComponentId: reviewedComponent,
       damageType: reviewedDamageType,
       manualEvidenceNote: manualEvidenceNote,
       hasConflictingViews: hasConflictingViews,
@@ -376,7 +378,7 @@ class DamageFinding {
   }
 
   DamageFinding edited({
-    required String vehicleComponent,
+    required VehicleComponentId vehicleComponentId,
     required String damageType,
     required List<String> supportingCaptureIds,
   }) => DamageFinding._(
@@ -384,7 +386,7 @@ class DamageFinding {
     reviewState: reviewState,
     observationIds: observationIds,
     supportingCaptureIds: List.unmodifiable(supportingCaptureIds),
-    vehicleComponent: vehicleComponent,
+    vehicleComponentId: vehicleComponentId,
     damageType: damageType,
     manualEvidenceNote: manualEvidenceNote,
     hasConflictingViews: hasConflictingViews,
@@ -407,7 +409,7 @@ class DamageFinding {
       reviewState: reviewState,
       observationIds: observationIds,
       supportingCaptureIds: supportingCaptureIds,
-      vehicleComponent: vehicleComponent,
+      vehicleComponentId: vehicleComponentId,
       damageType: damageType,
       manualEvidenceNote: manualEvidenceNote,
       hasConflictingViews: hasConflictingViews,
@@ -422,7 +424,7 @@ class DamageFinding {
         reviewState: FindingReviewState.proposed,
         observationIds: observationIds,
         supportingCaptureIds: supportingCaptureIds,
-        vehicleComponent: vehicleComponent,
+        vehicleComponentId: vehicleComponentId,
         damageType: damageType,
         manualEvidenceNote: manualEvidenceNote,
         hasConflictingViews: hasConflictingViews,
@@ -436,7 +438,7 @@ class DamageFinding {
     'reviewState': reviewState.name,
     'observationIds': observationIds,
     'supportingCaptureIds': supportingCaptureIds,
-    'vehicleComponent': vehicleComponent,
+    'vehicleComponentId': vehicleComponentId?.wireValue,
     'damageType': damageType,
     'manualEvidenceNote': manualEvidenceNote,
     'hasConflictingViews': hasConflictingViews,
@@ -445,31 +447,44 @@ class DamageFinding {
     'reviewOutcome': reviewOutcome?.name,
   };
 
-  factory DamageFinding.fromJson(Map<String, Object?> json) => DamageFinding._(
-    id: json['id']! as String,
-    reviewState: FindingReviewState.values.byName(
-      json['reviewState']! as String,
-    ),
-    observationIds: List.unmodifiable(
-      (json['observationIds'] as List? ?? const []).cast<String>(),
-    ),
-    supportingCaptureIds: List.unmodifiable(
-      (json['supportingCaptureIds'] as List? ?? const []).cast<String>(),
-    ),
-    vehicleComponent: json['vehicleComponent'] as String?,
-    damageType: json['damageType'] as String?,
-    manualEvidenceNote: json['manualEvidenceNote'] as String?,
-    hasConflictingViews: json['hasConflictingViews'] as bool? ?? false,
-    additionalViewRequests: List.unmodifiable(
-      (json['additionalViewRequests'] as List? ?? const []).cast<String>(),
-    ),
-    additionalViewOverrideReason:
-        json['additionalViewOverrideReason'] as String?,
-    reviewOutcome: switch (json['reviewOutcome']) {
-      final String value => FindingReviewOutcome.values.byName(value),
-      _ => null,
-    },
-  );
+  factory DamageFinding.fromJson(Map<String, Object?> json) {
+    if (json.containsKey('vehicleComponent')) {
+      throw const FormatException(
+        'Legacy vehicleComponent values are not supported; use vehicleComponentId.',
+      );
+    }
+    return DamageFinding._(
+      id: json['id']! as String,
+      reviewState: FindingReviewState.values.byName(
+        json['reviewState']! as String,
+      ),
+      observationIds: List.unmodifiable(
+        (json['observationIds'] as List? ?? const []).cast<String>(),
+      ),
+      supportingCaptureIds: List.unmodifiable(
+        (json['supportingCaptureIds'] as List? ?? const []).cast<String>(),
+      ),
+      vehicleComponentId: switch (json['vehicleComponentId']) {
+        final String value => VehicleComponentId.fromWire(value),
+        null => null,
+        _ => throw const FormatException(
+          'Vehicle Component ID must be a string.',
+        ),
+      },
+      damageType: json['damageType'] as String?,
+      manualEvidenceNote: json['manualEvidenceNote'] as String?,
+      hasConflictingViews: json['hasConflictingViews'] as bool? ?? false,
+      additionalViewRequests: List.unmodifiable(
+        (json['additionalViewRequests'] as List? ?? const []).cast<String>(),
+      ),
+      additionalViewOverrideReason:
+          json['additionalViewOverrideReason'] as String?,
+      reviewOutcome: switch (json['reviewOutcome']) {
+        final String value => FindingReviewOutcome.values.byName(value),
+        _ => null,
+      },
+    );
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -478,7 +493,7 @@ class DamageFinding {
       other.reviewState == reviewState &&
       _listEquals(other.observationIds, observationIds) &&
       _listEquals(other.supportingCaptureIds, supportingCaptureIds) &&
-      other.vehicleComponent == vehicleComponent &&
+      other.vehicleComponentId == vehicleComponentId &&
       other.damageType == damageType &&
       other.manualEvidenceNote == manualEvidenceNote &&
       other.hasConflictingViews == hasConflictingViews &&
@@ -492,13 +507,183 @@ class DamageFinding {
     reviewState,
     Object.hashAll(observationIds),
     Object.hashAll(supportingCaptureIds),
-    vehicleComponent,
+    vehicleComponentId,
     damageType,
     manualEvidenceNote,
     hasConflictingViews,
     Object.hashAll(additionalViewRequests),
     additionalViewOverrideReason,
     reviewOutcome,
+  );
+}
+
+/// The component identity and Appraiser-facing label preserved in a completed
+/// Preliminary Damage Assessment revision.
+class VehicleComponentSnapshot {
+  const VehicleComponentSnapshot({required this.id, required this.label});
+
+  factory VehicleComponentSnapshot.fromCurrent(VehicleComponentId id) {
+    final component = VehicleComponentCatalog.byId(id);
+    return VehicleComponentSnapshot(id: id, label: component.label);
+  }
+
+  final VehicleComponentId id;
+  final String label;
+
+  Map<String, Object?> toJson() => {'id': id.wireValue, 'label': label};
+
+  factory VehicleComponentSnapshot.fromJson(Map<String, Object?> json) {
+    final label = json['label'];
+    if (label is! String || label.trim().isEmpty) {
+      throw const FormatException(
+        'Vehicle Component snapshot requires a label.',
+      );
+    }
+    final id = json['id'];
+    if (id is! String) {
+      throw const FormatException('Vehicle Component snapshot requires an ID.');
+    }
+    return VehicleComponentSnapshot(
+      id: VehicleComponentId.fromWire(id),
+      label: label,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is VehicleComponentSnapshot &&
+      other.id == id &&
+      other.label == label;
+
+  @override
+  int get hashCode => Object.hash(id, label);
+}
+
+/// An immutable, completed representation of a confirmed Damage Finding.
+class CompletedDamageFinding {
+  const CompletedDamageFinding({
+    required this.id,
+    required this.observationIds,
+    required this.supportingCaptureIds,
+    required this.vehicleComponent,
+    required this.damageType,
+    required this.manualEvidenceNote,
+    required this.hasConflictingViews,
+    required this.additionalViewRequests,
+    required this.additionalViewOverrideReason,
+  });
+
+  factory CompletedDamageFinding.fromFinding(DamageFinding finding) {
+    final componentId = finding.vehicleComponentId;
+    final damageType = finding.damageType;
+    if (finding.reviewState != FindingReviewState.confirmed ||
+        componentId == null ||
+        damageType == null) {
+      throw const AssessmentInvariantViolation(
+        'Only complete Confirmed Findings can be frozen into a revision.',
+      );
+    }
+    return CompletedDamageFinding(
+      id: finding.id,
+      observationIds: List.unmodifiable(finding.observationIds),
+      supportingCaptureIds: List.unmodifiable(finding.supportingCaptureIds),
+      vehicleComponent: VehicleComponentSnapshot.fromCurrent(componentId),
+      damageType: damageType,
+      manualEvidenceNote: finding.manualEvidenceNote,
+      hasConflictingViews: finding.hasConflictingViews,
+      additionalViewRequests: List.unmodifiable(finding.additionalViewRequests),
+      additionalViewOverrideReason: finding.additionalViewOverrideReason,
+    );
+  }
+
+  final String id;
+  final List<String> observationIds;
+  final List<String> supportingCaptureIds;
+  final VehicleComponentSnapshot vehicleComponent;
+  final String damageType;
+  final String? manualEvidenceNote;
+  final bool hasConflictingViews;
+  final List<String> additionalViewRequests;
+  final String? additionalViewOverrideReason;
+
+  DamageFinding get asCurrentFinding => DamageFinding._(
+    id: id,
+    reviewState: FindingReviewState.confirmed,
+    observationIds: observationIds,
+    supportingCaptureIds: supportingCaptureIds,
+    vehicleComponentId: vehicleComponent.id,
+    damageType: damageType,
+    manualEvidenceNote: manualEvidenceNote,
+    hasConflictingViews: hasConflictingViews,
+    additionalViewRequests: additionalViewRequests,
+    additionalViewOverrideReason: additionalViewOverrideReason,
+  );
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'observationIds': observationIds,
+    'supportingCaptureIds': supportingCaptureIds,
+    'vehicleComponentSnapshot': vehicleComponent.toJson(),
+    'damageType': damageType,
+    'manualEvidenceNote': manualEvidenceNote,
+    'hasConflictingViews': hasConflictingViews,
+    'additionalViewRequests': additionalViewRequests,
+    'additionalViewOverrideReason': additionalViewOverrideReason,
+  };
+
+  factory CompletedDamageFinding.fromJson(Map<String, Object?> json) {
+    final snapshot = json['vehicleComponentSnapshot'];
+    if (snapshot is! Map) {
+      throw const FormatException(
+        'Completed Findings require a Vehicle Component snapshot.',
+      );
+    }
+    return CompletedDamageFinding(
+      id: json['id']! as String,
+      observationIds: List.unmodifiable(
+        (json['observationIds'] as List? ?? const []).cast<String>(),
+      ),
+      supportingCaptureIds: List.unmodifiable(
+        (json['supportingCaptureIds'] as List? ?? const []).cast<String>(),
+      ),
+      vehicleComponent: VehicleComponentSnapshot.fromJson(
+        Map<String, Object?>.from(snapshot),
+      ),
+      damageType: json['damageType']! as String,
+      manualEvidenceNote: json['manualEvidenceNote'] as String?,
+      hasConflictingViews: json['hasConflictingViews'] as bool? ?? false,
+      additionalViewRequests: List.unmodifiable(
+        (json['additionalViewRequests'] as List? ?? const []).cast<String>(),
+      ),
+      additionalViewOverrideReason:
+          json['additionalViewOverrideReason'] as String?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is CompletedDamageFinding &&
+      other.id == id &&
+      _listEquals(other.observationIds, observationIds) &&
+      _listEquals(other.supportingCaptureIds, supportingCaptureIds) &&
+      other.vehicleComponent == vehicleComponent &&
+      other.damageType == damageType &&
+      other.manualEvidenceNote == manualEvidenceNote &&
+      other.hasConflictingViews == hasConflictingViews &&
+      _listEquals(other.additionalViewRequests, additionalViewRequests) &&
+      other.additionalViewOverrideReason == additionalViewOverrideReason;
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    Object.hashAll(observationIds),
+    Object.hashAll(supportingCaptureIds),
+    vehicleComponent,
+    damageType,
+    manualEvidenceNote,
+    hasConflictingViews,
+    Object.hashAll(additionalViewRequests),
+    additionalViewOverrideReason,
   );
 }
 
@@ -1127,7 +1312,7 @@ class PreliminaryDamageAssessmentRevision {
     required this.vehicleSnapshot,
     required List<Capture> captures,
     required List<DamageObservation> observations,
-    required List<DamageFinding> confirmedFindings,
+    required List<CompletedDamageFinding> confirmedFindings,
     required List<AssessmentCorrection> corrections,
     required this.estimate,
     required List<SeverityAssessment> severityAssessments,
@@ -1148,7 +1333,7 @@ class PreliminaryDamageAssessmentRevision {
   final Vehicle vehicleSnapshot;
   final List<Capture> captures;
   final List<DamageObservation> observations;
-  final List<DamageFinding> confirmedFindings;
+  final List<CompletedDamageFinding> confirmedFindings;
   final List<AssessmentCorrection> corrections;
   final AssessmentEstimate estimate;
   final List<SeverityAssessment> severityAssessments;
@@ -1201,8 +1386,9 @@ class PreliminaryDamageAssessmentRevision {
         .toList(),
     confirmedFindings: (json['confirmedFindings']! as List)
         .map(
-          (value) =>
-              DamageFinding.fromJson(Map<String, Object?>.from(value as Map)),
+          (value) => CompletedDamageFinding.fromJson(
+            Map<String, Object?>.from(value as Map),
+          ),
         )
         .toList(),
     corrections: (json['corrections']! as List)
@@ -1421,7 +1607,7 @@ class IntakeAssessment {
         );
       }
       if (finding.reviewState == FindingReviewState.confirmed &&
-          ((finding.vehicleComponent?.trim().isEmpty ?? true) ||
+          (finding.vehicleComponentId == null ||
               (finding.damageType?.trim().isEmpty ?? true))) {
         throw const AssessmentInvariantViolation(
           'Confirmed Findings require a Vehicle Component and Damage Type.',
@@ -2020,7 +2206,7 @@ class IntakeAssessment {
           .map((value) => DamageObservation.fromJson(value.toJson()))
           .toList(),
       confirmedFindings: confirmedFindings
-          .map((value) => DamageFinding.fromJson(value.toJson()))
+          .map(CompletedDamageFinding.fromFinding)
           .toList(),
       corrections: corrections
           .map((value) => AssessmentCorrection.fromJson(value.toJson()))
@@ -2162,16 +2348,15 @@ class IntakeAssessment {
       }
     }
     final revisionFindingIds = <String>{};
-    final revisionFindingById = <String, DamageFinding>{};
+    final revisionFindingById = <String, CompletedDamageFinding>{};
     for (final finding in revision.confirmedFindings) {
-      if (finding.reviewState != FindingReviewState.confirmed ||
-          finding.id.trim().isEmpty ||
+      if (finding.id.trim().isEmpty ||
           !revisionFindingIds.add(finding.id) ||
           finding.supportingCaptureIds.isEmpty ||
           !revisionCaptureIds.containsAll(finding.supportingCaptureIds) ||
           !revisionObservationIds.containsAll(finding.observationIds) ||
-          (finding.vehicleComponent?.trim().isEmpty ?? true) ||
-          (finding.damageType?.trim().isEmpty ?? true) ||
+          finding.vehicleComponent.label.trim().isEmpty ||
+          finding.damageType.trim().isEmpty ||
           (finding.observationIds.isEmpty &&
               (finding.manualEvidenceNote?.trim().isEmpty ?? true))) {
         throw const AssessmentInvariantViolation(
@@ -2226,7 +2411,7 @@ class IntakeAssessment {
     if (revision.confirmedFindings.any(
       (finding) =>
           revision.estimate.reviewedFindingSignatures[finding.id] !=
-          _findingReviewSignature(finding),
+          _findingReviewSignature(finding.asCurrentFinding),
     )) {
       throw const AssessmentInvariantViolation(
         'A completed revision requires an Estimate reviewed against its frozen Findings.',
@@ -2239,9 +2424,14 @@ class IntakeAssessment {
           'A completed revision has duplicate Severity Assessments.',
         );
       }
-      _validateSeverity(severity, revisionFindingById, revisionCaptureIds);
+      _validateSeverity(severity, {
+        for (final entry in revisionFindingById.entries)
+          entry.key: entry.value.asCurrentFinding,
+      }, revisionCaptureIds);
       if (severity.reviewedFindingSignature !=
-          _findingReviewSignature(revisionFindingById[severity.findingId]!)) {
+          _findingReviewSignature(
+            revisionFindingById[severity.findingId]!.asCurrentFinding,
+          )) {
         throw const AssessmentInvariantViolation(
           'A completed revision requires Severity reviewed against its frozen Finding.',
         );

@@ -1,4 +1,5 @@
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 
 class SuggestedRepairOperation {
   const SuggestedRepairOperation({
@@ -48,13 +49,17 @@ class UnavailableAssessmentEstimateSource implements AssessmentEstimateSource {
         operationId: 'review-${_componentId(finding)}',
         findingId: finding.id,
         description:
-            'Review shared repair operation for ${finding.vehicleComponent}',
+            'Review shared repair operation for ${_componentLabel(finding)}',
       ),
   ];
 
   String _componentId(DamageFinding finding) {
-    final component = finding.vehicleComponent?.trim().toLowerCase() ?? '';
-    final normalized = component.replaceAll(RegExp('[^a-z0-9]+'), '-');
-    return normalized.replaceAll(RegExp(r'^-+|-+$'), '');
+    return finding.vehicleComponentId?.wireValue ?? 'unknown-component';
+  }
+
+  String _componentLabel(DamageFinding finding) {
+    final id = finding.vehicleComponentId;
+    if (id == null) return 'an unassigned component';
+    return VehicleComponentCatalog.byId(id).label;
   }
 }

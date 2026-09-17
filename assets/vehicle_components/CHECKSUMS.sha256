@@ -1,0 +1,4 @@
+# SHA-256 checksums for release-reviewable vehicle geometry source files.
+# This manifest is external to the asset it verifies; geometry does not embed a
+# self-referential checksum.
+cd7c14f37dd1da9b5cc782683f688ecd57d20007c2c9c4623ef9ba7a00615433  vehicle_component_geometry.v1.json

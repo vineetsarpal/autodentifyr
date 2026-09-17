@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_completion_controller.dart';
 import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 import 'package:autodentifyr/services/assessment_report_delivery.dart';
@@ -622,7 +623,10 @@ class _AssessmentSummary extends StatelessWidget {
   final Vehicle vehicle;
   final String appraiserName;
   final List<Capture> captures;
-  final List<DamageFinding> findings;
+
+  /// Draft summaries receive [DamageFinding]s; report summaries receive
+  /// immutable [CompletedDamageFinding] snapshots.
+  final List<Object> findings;
   final List<SeverityAssessment> severities;
   final AssessmentEstimate? estimate;
   final bool noVisibleDamageOutcome;
@@ -678,31 +682,41 @@ class _AssessmentSummary extends StatelessWidget {
               : 'No confirmed findings yet.',
         ),
       for (final finding in findings) ...[
-        Text('${finding.vehicleComponent} • ${finding.damageType}'),
-        if (isSeverityCurrent != null && !isSeverityCurrent!(finding))
+        Text(
+          '${_summaryComponentLabel(finding)} • ${_summaryDamageType(finding)}',
+        ),
+        if (finding is DamageFinding &&
+            isSeverityCurrent != null &&
+            !isSeverityCurrent!(finding))
           const Text('Severity review needs updating.'),
         for (final severity in severities.where(
-          (value) => value.findingId == finding.id,
+          (value) => value.findingId == _summaryFindingId(finding),
         )) ...[
           Text(
-            isSeverityCurrent != null && !isSeverityCurrent!(finding)
+            finding is DamageFinding &&
+                    isSeverityCurrent != null &&
+                    !isSeverityCurrent!(finding)
                 ? 'Earlier severity: ${_severityName(severity.reviewedLevel)} (stale)'
                 : 'Severity: ${_severityName(severity.reviewedLevel)}',
           ),
           if (severity.uncertainty != null)
             Text(
-              isSeverityCurrent != null && !isSeverityCurrent!(finding)
+              finding is DamageFinding &&
+                      isSeverityCurrent != null &&
+                      !isSeverityCurrent!(finding)
                   ? 'Earlier uncertainty (stale): ${severity.uncertainty}'
                   : 'Uncertainty: ${severity.uncertainty}',
             ),
           if (severity.followUpNeed != null)
             Text(
-              isSeverityCurrent != null && !isSeverityCurrent!(finding)
+              finding is DamageFinding &&
+                      isSeverityCurrent != null &&
+                      !isSeverityCurrent!(finding)
                   ? 'Earlier follow-up (stale): ${severity.followUpNeed}'
                   : 'Follow-up: ${severity.followUpNeed}',
             ),
         ],
-        if (finding.hasConflictingViews)
+        if (_summaryHasConflictingViews(finding))
           const Text('Finding has conflicting views.'),
       ],
       const SizedBox(height: 12),
@@ -714,7 +728,9 @@ class _AssessmentSummary extends StatelessWidget {
       ),
       if (estimate == null) const Text('Estimate has not been reviewed.'),
       if (isEstimateCurrent != null &&
-          findings.any((finding) => !isEstimateCurrent!(finding)))
+          findings.whereType<DamageFinding>().any(
+            (finding) => !isEstimateCurrent!(finding),
+          ))
         const Text('Estimate review needs updating for changed findings.'),
       for (final operation in estimate?.operations ?? const <RepairOperation>[])
         Text(
@@ -735,4 +751,30 @@ String _severityName(SeverityLevel level) => switch (level) {
   SeverityLevel.moderate => 'Moderate',
   SeverityLevel.severe => 'Severe',
   SeverityLevel.undetermined => 'Undetermined',
+};
+
+String _summaryComponentLabel(Object finding) => switch (finding) {
+  DamageFinding(:final vehicleComponentId) =>
+    vehicleComponentId == null
+        ? 'Component not selected'
+        : VehicleComponentCatalog.byId(vehicleComponentId).label,
+  CompletedDamageFinding(:final vehicleComponent) => vehicleComponent.label,
+  _ => 'Component not selected',
+};
+
+String _summaryDamageType(Object finding) => switch (finding) {
+  DamageFinding(:final damageType) => damageType ?? 'Damage type not selected',
+  CompletedDamageFinding(:final damageType) => damageType,
+  _ => 'Damage type not selected',
+};
+
+String _summaryFindingId(Object finding) => switch (finding) {
+  DamageFinding(:final id) || CompletedDamageFinding(:final id) => id,
+  _ => '',
+};
+
+bool _summaryHasConflictingViews(Object finding) => switch (finding) {
+  DamageFinding(:final hasConflictingViews) ||
+  CompletedDamageFinding(:final hasConflictingViews) => hasConflictingViews,
+  _ => false,
 };

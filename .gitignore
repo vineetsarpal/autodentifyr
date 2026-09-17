@@ -39,6 +39,7 @@ analysis_benchmark.json
 # Flutter/Dart/Pub related
 **/doc/api/
 .dart_tool/
+devtools_options.yaml
 .flutter-plugins
 .flutter-plugins-dependencies
 **/generated_plugin_registrant.dart
@@ -163,3 +164,6 @@ app.*.map.json
 # Privacy and Terms
 PRIVACY_POLICY.md
 TERMS_OF_SERVICE.md
+
+# Local working notes and research
+/docs.local/

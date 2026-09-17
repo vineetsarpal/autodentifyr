@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -129,7 +130,7 @@ void main() {
         final withProposal = observed.addFinding(proposed);
         final confirmed = proposed.reviewed(
           state: FindingReviewState.confirmed,
-          vehicleComponent: 'left-front-door',
+          vehicleComponentId: VehicleComponentId.leftFrontDoor,
           damageType: 'dent',
         );
         final corrected = withProposal.correctFinding(
@@ -185,139 +186,23 @@ void main() {
       },
     );
 
-    test(
-      'loads schema version 1 and rewrites it at the current version',
-      () async {
-        final directory = await Directory.systemTemp.createTemp(
-          'autodentifyr-assessment-migration-',
-        );
-        addTearDown(() => directory.delete(recursive: true));
-        final store = File('${directory.path}/assessments.json');
-        final legacyRecord = _draft().toJson()
-          ..remove('captures')
-          ..remove('observations')
-          ..remove('findings')
-          ..remove('corrections');
+    test('rejects all pre-schema-11 stores without migration', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'autodentifyr-assessment-pre-schema-11-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final store = File('${directory.path}/assessments.json');
+
+      for (final schemaVersion in [1, 4, 6, 10]) {
         await store.writeAsString(
-          jsonEncode({
-            'schemaVersion': 1,
-            'assessments': [legacyRecord],
-          }),
+          jsonEncode({'schemaVersion': schemaVersion, 'assessments': const []}),
         );
-        final repository = FileAssessmentRepository(directory: directory);
-
-        final migrated = await repository.findById('assessment-1');
-        await repository.save(migrated!);
-        final rewritten = jsonDecode(await store.readAsString()) as Map;
-
-        expect(migrated, _draft());
         expect(
-          rewritten['schemaVersion'],
-          FileAssessmentRepository.currentSchemaVersion,
+          FileAssessmentRepository(directory: directory).list,
+          throwsA(isA<FormatException>()),
         );
-      },
-    );
-
-    test(
-      'migrates capture and runtime provenance from schema version 4',
-      () async {
-        final directory = await Directory.systemTemp.createTemp(
-          'autodentifyr-assessment-v4-migration-',
-        );
-        addTearDown(() => directory.delete(recursive: true));
-        final store = File('${directory.path}/assessments.json');
-        final legacyRecord = _draft()
-            .acceptCapture(_capture())
-            .recordObservation(_observation())
-            .toJson();
-        final capture = (legacyRecord['captures']! as List).single as Map;
-        capture.remove('capturedAt');
-        capture.remove('orientation');
-        final observation =
-            (legacyRecord['observations']! as List).single as Map;
-        observation.remove('runtimeIdentifier');
-        await store.writeAsString(
-          jsonEncode({
-            'schemaVersion': 4,
-            'assessments': [legacyRecord],
-          }),
-        );
-
-        final migrated = await FileAssessmentRepository(
-          directory: directory,
-        ).findById('assessment-1');
-
-        expect(migrated!.captures.single.capturedAt, _capture().acceptedAt);
-        expect(
-          migrated.captures.single.orientation,
-          CaptureOrientation.unknown,
-        );
-        expect(migrated.observations.single.runtimeIdentifier, 'unknown');
-      },
-    );
-
-    test(
-      'migrates Partial Estimate acknowledgment provenance from schema 6',
-      () async {
-        final directory = await Directory.systemTemp.createTemp(
-          'autodentifyr-assessment-v6-migration-',
-        );
-        addTearDown(() => directory.delete(recursive: true));
-        final store = File('${directory.path}/assessments.json');
-        final proposed = DamageFinding.proposed(
-          id: 'finding-1',
-          observationIds: const ['observation-1'],
-          supportingCaptureIds: const ['capture-1'],
-        );
-        final assessment = _draft()
-            .acceptCapture(_capture())
-            .recordObservation(_observation())
-            .addFinding(
-              proposed.reviewed(
-                state: FindingReviewState.confirmed,
-                vehicleComponent: 'left-front-door',
-                damageType: 'dent',
-              ),
-            )
-            .recordEstimate(
-              AssessmentEstimate(
-                operations: const [
-                  RepairOperation(
-                    id: 'operation-1',
-                    findingIds: ['finding-1'],
-                    description: 'Repair left-front door dent',
-                  ),
-                ],
-                assumptions: const ['Pricing unavailable.'],
-                reviewedByProfileId: 'appraiser-1',
-                reviewedAt: DateTime.utc(2026, 9, 6, 18, 3),
-                missingPricingAcknowledgedAt: DateTime.utc(2026, 9, 6, 18, 3),
-                missingPricingAcknowledgedByProfileId: 'appraiser-1',
-              ),
-            );
-        final legacyRecord = assessment.toJson();
-        final legacyEstimate = legacyRecord['estimate']! as Map;
-        legacyEstimate.remove('sourceVersion');
-        legacyEstimate.remove('overrides');
-        legacyEstimate.remove('missingPricingAcknowledgedByProfileId');
-        await store.writeAsString(
-          jsonEncode({
-            'schemaVersion': 6,
-            'assessments': [legacyRecord],
-          }),
-        );
-
-        final migrated = await FileAssessmentRepository(
-          directory: directory,
-        ).findById('assessment-1');
-
-        expect(migrated!.estimate!.sourceVersion, 'unknown');
-        expect(
-          migrated.estimate!.missingPricingAcknowledgedByProfileId,
-          'appraiser-1',
-        );
-      },
-    );
+      }
+    });
 
     test(
       'persists estimate and severity records with explicit unknowns',
@@ -329,7 +214,7 @@ void main() {
         );
         final confirmed = proposed.reviewed(
           state: FindingReviewState.confirmed,
-          vehicleComponent: 'left-front-door',
+          vehicleComponentId: VehicleComponentId.leftFrontDoor,
           damageType: 'dent',
         );
         final assessment = _draft()
@@ -459,14 +344,14 @@ void main() {
       expect(
         () => proposed.reviewed(
           state: FindingReviewState.confirmed,
-          vehicleComponent: 'left-front-door',
+          vehicleComponentId: VehicleComponentId.leftFrontDoor,
         ),
         throwsA(isA<AssessmentInvariantViolation>()),
       );
       expect(
         () => DamageFinding.manual(
           id: 'finding-2',
-          vehicleComponent: 'left-front-door',
+          vehicleComponentId: VehicleComponentId.leftFrontDoor,
           damageType: 'dent',
           supportingCaptureIds: const ['capture-1'],
           evidenceNote: '   ',
@@ -498,7 +383,7 @@ void main() {
             .addFinding(
               proposed.reviewed(
                 state: FindingReviewState.confirmed,
-                vehicleComponent: 'left-front-door',
+                vehicleComponentId: VehicleComponentId.leftFrontDoor,
                 damageType: 'dent',
               ),
             )

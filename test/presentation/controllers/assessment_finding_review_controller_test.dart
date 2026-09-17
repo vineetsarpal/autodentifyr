@@ -1,4 +1,5 @@
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_finding_review_controller.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,7 +58,7 @@ void main() {
       await controller.submit(
         const ConfirmFindingAction(
           findingId: 'proposed-observation-1',
-          vehicleComponent: 'left-front door',
+          vehicleComponentId: VehicleComponentId.leftFrontDoor,
           damageType: 'crease',
           reason: 'Visible crease corrects the model suggestion.',
         ),
@@ -67,7 +68,7 @@ void main() {
       final confirmed = saved!.findings.first;
       expect(controller.state.phase, FindingReviewPhase.ready);
       expect(confirmed.reviewState, FindingReviewState.confirmed);
-      expect(confirmed.vehicleComponent, 'left-front door');
+      expect(confirmed.vehicleComponentId, VehicleComponentId.leftFrontDoor);
       expect(confirmed.damageType, 'crease');
       expect(confirmed.supportingCaptureIds, ['capture-1']);
       expect(confirmed.observationIds, ['observation-1']);
@@ -120,7 +121,7 @@ void main() {
       await controller.submit(
         const EditFindingAction(
           findingId: 'proposed-observation-1',
-          vehicleComponent: 'left-front fender',
+          vehicleComponentId: VehicleComponentId.leftFrontFender,
           damageType: 'crease',
           supportingCaptureIds: ['capture-1'],
           reason: 'The Appraiser corrected the suggested classification.',
@@ -130,7 +131,7 @@ void main() {
       final saved = (await repository.findById('assessment-1'))!;
       final edited = saved.findings.first;
       expect(edited.reviewState, FindingReviewState.proposed);
-      expect(edited.vehicleComponent, 'left-front fender');
+      expect(edited.vehicleComponentId, VehicleComponentId.leftFrontFender);
       expect(edited.damageType, 'crease');
       expect(edited.observationIds, ['observation-1']);
       expect(saved.corrections.single.kind, AssessmentCorrectionKind.edit);
@@ -150,7 +151,7 @@ void main() {
 
         await controller.submit(
           const AddManualFindingAction(
-            vehicleComponent: 'right-rear quarter panel',
+            vehicleComponentId: VehicleComponentId.rightRearQuarterPanel,
             damageType: 'scratch',
             supportingCaptureIds: ['capture-2'],
             evidenceNote: 'A scratch is visible below the model region.',
@@ -172,7 +173,7 @@ void main() {
 
         await controller.submit(
           const AddManualFindingAction(
-            vehicleComponent: 'hood',
+            vehicleComponentId: VehicleComponentId.hood,
             damageType: 'dent',
             supportingCaptureIds: ['capture-1'],
             evidenceNote: '',
@@ -267,7 +268,7 @@ void main() {
         await controller.submit(
           const ConfirmFindingAction(
             findingId: 'proposed-observation-1',
-            vehicleComponent: 'left-front door',
+            vehicleComponentId: VehicleComponentId.leftFrontDoor,
             damageType: 'dent',
             reason: 'Confirming from other retained evidence.',
           ),
@@ -278,7 +279,7 @@ void main() {
         await controller.submit(
           const ConfirmFindingAction(
             findingId: 'proposed-observation-1',
-            vehicleComponent: 'left-front door',
+            vehicleComponentId: VehicleComponentId.leftFrontDoor,
             damageType: 'dent',
             reason: 'Confirming from other retained evidence.',
             additionalViewOverrideReason: 'The second Capture shows the edge.',
@@ -310,7 +311,7 @@ void main() {
         await controller.submit(
           const MergeFindingsAction(
             findingIds: ['proposed-observation-1', 'proposed-observation-2'],
-            vehicleComponent: 'left-front door',
+            vehicleComponentId: VehicleComponentId.leftFrontDoor,
             damageType: 'surface damage',
             reason: 'Both observations describe one damaged area.',
           ),
@@ -349,7 +350,7 @@ void main() {
         await controller.submit(
           const MergeFindingsAction(
             findingIds: ['proposed-observation-1', 'proposed-observation-2'],
-            vehicleComponent: 'left-front door',
+            vehicleComponentId: VehicleComponentId.leftFrontDoor,
             damageType: 'surface damage',
             reason: 'Reviewing the candidate merge.',
           ),
@@ -360,13 +361,13 @@ void main() {
             findingId: 'merged-1',
             parts: [
               SplitFindingPart(
-                vehicleComponent: 'left-front door',
+                vehicleComponentId: VehicleComponentId.leftFrontDoor,
                 damageType: 'dent',
                 observationIds: ['observation-1'],
                 supportingCaptureIds: ['capture-1'],
               ),
               SplitFindingPart(
-                vehicleComponent: 'left-front door',
+                vehicleComponentId: VehicleComponentId.leftFrontDoor,
                 damageType: 'scratch',
                 observationIds: ['observation-2'],
                 supportingCaptureIds: ['capture-2'],
@@ -404,26 +405,9 @@ void main() {
         await controller.load();
 
         await controller.submit(
-          const ConfirmFindingAction(
-            findingId: 'proposed-observation-1',
-            vehicleComponent: '',
-            damageType: 'dent',
-            reason: 'Missing a position-specific component.',
-          ),
-        );
-        expect(controller.state.phase, FindingReviewPhase.saveFailed);
-        expect(controller.state.message, contains('Vehicle Component'));
-        expect(
-          (await repository.findById(
-            'assessment-1',
-          ))!.findings.first.reviewState,
-          FindingReviewState.proposed,
-        );
-
-        await controller.submit(
           const MergeFindingsAction(
             findingIds: ['proposed-observation-1', 'proposed-observation-2'],
-            vehicleComponent: 'left-front door',
+            vehicleComponentId: VehicleComponentId.leftFrontDoor,
             damageType: 'surface damage',
             reason: 'Create a source for the split check.',
           ),
@@ -433,13 +417,13 @@ void main() {
             findingId: 'merged-1',
             parts: [
               SplitFindingPart(
-                vehicleComponent: 'left-front door',
+                vehicleComponentId: VehicleComponentId.leftFrontDoor,
                 damageType: 'dent',
                 observationIds: ['observation-1'],
                 supportingCaptureIds: ['capture-1'],
               ),
               SplitFindingPart(
-                vehicleComponent: 'left-front door',
+                vehicleComponentId: VehicleComponentId.leftFrontDoor,
                 damageType: 'scratch',
                 observationIds: [],
                 supportingCaptureIds: ['capture-1'],

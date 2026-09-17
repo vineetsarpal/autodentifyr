@@ -1,4 +1,5 @@
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_severity_controller.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:autodentifyr/services/assessment_severity_source.dart';
@@ -392,7 +393,7 @@ IntakeAssessment _assessment({bool conflictingViews = false}) {
     id: 'finding-1',
     observationIds: const ['observation-1'],
     supportingCaptureIds: const ['capture-1'],
-    suggestedVehicleComponent: 'left-front door',
+    suggestedVehicleComponentId: VehicleComponentId.leftFrontDoor,
     suggestedDamageType: 'dent',
   );
   if (conflictingViews) {
@@ -403,7 +404,7 @@ IntakeAssessment _assessment({bool conflictingViews = false}) {
   }
   final confirmed = proposed.reviewed(
     state: FindingReviewState.confirmed,
-    vehicleComponent: 'left-front door',
+    vehicleComponentId: VehicleComponentId.leftFrontDoor,
     damageType: 'dent',
   );
   return IntakeAssessment.create(

@@ -25,8 +25,8 @@ A persistent Repair Shop record for one passenger car or light truck. It has an 
 _Avoid_: Assessment, Capture
 
 **Vehicle Component**:
-A position-specific physical exterior part of a Vehicle, such as the left-front door or right headlight. An Intake Assessment preserves the component identity used at the time. One Vehicle Component may have multiple Damage Findings when damage types or separately reviewable damaged areas differ.
-_Avoid_: Generic part category, Damage Finding
+A position-specific physical exterior part of a Vehicle, such as the left front door or right headlight. Its canonical identity is independent of its Appraiser-facing label and of any detector terminology. A detector observation may suggest one or more candidate Vehicle Components, but an ambiguous detector class is not itself a Vehicle Component. A completed Preliminary Damage Assessment revision preserves both the canonical component identity and the Appraiser-facing label used at completion. The same Vehicle Component may appear in multiple vehicle views and may have multiple Damage Findings when damage types or separately reviewable damaged areas differ.
+_Avoid_: Generic part category, detector class, Damage Finding
 
 **Intake Assessment**:
 An in-person assessment of visible exterior collision and cosmetic damage for one Vehicle during one repair-shop intake event. It may span pauses and multiple capture sessions, but a later visit or materially different purpose creates another Intake Assessment. Its business state is Draft, Completed, or Voided.

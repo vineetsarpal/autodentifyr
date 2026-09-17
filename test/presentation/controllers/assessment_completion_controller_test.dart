@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_completion_controller.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_progress.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
@@ -194,7 +195,7 @@ void main() {
           () => completed.addFinding(
             DamageFinding.manual(
               id: 'finding-2',
-              vehicleComponent: 'left-front-door',
+              vehicleComponentId: VehicleComponentId.leftFrontDoor,
               damageType: 'scratch',
               supportingCaptureIds: const ['capture-1'],
               evidenceNote: 'Visible scratch in Capture capture-1.',
@@ -296,7 +297,7 @@ void main() {
           );
       final finding = reviewed.findings.single;
       final changed = finding.edited(
-        vehicleComponent: 'left-rear-door',
+        vehicleComponentId: VehicleComponentId.leftRearDoor,
         damageType: 'dent',
         supportingCaptureIds: finding.supportingCaptureIds,
       );
@@ -670,7 +671,7 @@ IntakeAssessment _confirmedAssessment() {
       .addFinding(
         proposed.reviewed(
           state: FindingReviewState.confirmed,
-          vehicleComponent: 'left-front-door',
+          vehicleComponentId: VehicleComponentId.leftFrontDoor,
           damageType: 'dent',
         ),
       );

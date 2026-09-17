@@ -1,5 +1,7 @@
 import 'package:ultralytics_yolo/models/yolo_task.dart';
 
+export 'vehicle_component.dart';
+
 enum ModelType {
   detect('best', YOLOTask.detect);
 

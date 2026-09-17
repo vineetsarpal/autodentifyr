@@ -1,4 +1,5 @@
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_finding_review_controller.dart';
 import 'package:autodentifyr/presentation/screens/assessment_finding_review_screen.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
@@ -135,7 +136,75 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Confirmed'), findsOneWidget);
-      expect(find.text('left-front door • dent'), findsOneWidget);
+      expect(find.text('Left front door • dent'), findsOneWidget);
+    });
+
+    testWidgets('Confirm derives an exact detector suggestion from evidence', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('component-selector-Vehicle Component')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Part: No component selected'), findsOneWidget);
+      expect(find.text('Suggested: Front bumper'), findsOneWidget);
+    });
+
+    testWidgets('Confirm presents detector candidates', (tester) async {
+      final candidateHarness = await _Harness.create(
+        firstObservationClass: 'headlight-damage',
+      );
+      await tester.pumpWidget(candidateHarness.widget);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('component-selector-Vehicle Component')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Choose one of these suggested components'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('candidate-component-left_headlight')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('candidate-component-right_headlight')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Confirm starts empty for unknown detector evidence', (
+      tester,
+    ) async {
+      final unknownHarness = await _Harness.create();
+      await tester.pumpWidget(unknownHarness.widget);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('component-selector-Vehicle Component')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Part: No component selected'), findsOneWidget);
+      expect(find.text('Suggested: Dent'), findsNothing);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('picker-view-top')))
+            .selected,
+        isTrue,
+      );
     });
 
     testWidgets('Appraiser edits, dismisses, and manually adds Findings', (
@@ -155,7 +224,7 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      expect(find.text('left-front fender • crease'), findsOneWidget);
+      expect(find.text('Left front fender • crease'), findsOneWidget);
 
       final dismissButton = find.byKey(
         const Key('dismiss-proposed-observation-2'),
@@ -184,8 +253,8 @@ void main() {
       await tester.enterText(find.byKey(const Key('reason')), 'Manual review.');
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('hood • scratch'), 300);
-      expect(find.text('hood • scratch'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Hood • scratch'), 300);
+      expect(find.text('Hood • scratch'), findsOneWidget);
     });
 
     testWidgets('Appraiser records uncertainty and an Undetermined outcome', (
@@ -259,7 +328,7 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      expect(find.text('left-front door • surface damage'), findsOneWidget);
+      expect(find.text('Left front door • surface damage'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('split-generated-0')));
       await tester.pumpAndSettle();
@@ -294,8 +363,8 @@ void main() {
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
 
-      expect(find.text('left-front door • dent'), findsOneWidget);
-      expect(find.text('left-front door • scratch'), findsOneWidget);
+      expect(find.text('Left front door • dent'), findsOneWidget);
+      expect(find.text('Left front door • scratch'), findsOneWidget);
     });
 
     testWidgets(
@@ -372,8 +441,8 @@ void main() {
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
-      await tester.scrollUntilVisible(find.text('hood • scratch'), 300);
-      expect(find.text('hood • scratch'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Hood • scratch'), 300);
+      expect(find.text('Hood • scratch'), findsOneWidget);
     });
   });
 }
@@ -383,11 +452,23 @@ Future<void> _selectComponent(
   String label,
   String component,
 ) async {
-  final dropdown = find.byKey(Key('component-dropdown-$label'));
-  await tester.ensureVisible(dropdown);
-  await tester.tap(dropdown);
+  final selector = find.byKey(Key('component-selector-$label'));
+  await tester.ensureVisible(selector);
+  await tester.tap(selector);
   await tester.pumpAndSettle();
-  await tester.tap(find.text(component).last);
+  final id = VehicleComponentCatalog.all
+      .singleWhere(
+        (item) => item.label.toLowerCase() == component.replaceAll('-', ' '),
+      )
+      .id;
+  final componentRecord = VehicleComponentCatalog.byId(id);
+  await tester.tap(
+    find.byKey(Key('picker-view-${componentRecord.primaryView.name}')),
+  );
+  await tester.pump();
+  await tester.tap(find.byKey(Key('picker-active-component-${id.wireValue}')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('use-component-selection')));
   await tester.pumpAndSettle();
 }
 
@@ -432,7 +513,9 @@ class _Harness {
   Widget get widget =>
       MaterialApp(home: AssessmentFindingReviewScreen(controller: controller));
 
-  static Future<_Harness> create() async {
+  static Future<_Harness> create({
+    String firstObservationClass = 'dent',
+  }) async {
     final repository = FailNextAssessmentSaveRepository(
       InMemoryAssessmentRepository(),
     );
@@ -456,8 +539,8 @@ class _Harness {
         ),
       );
     }
-    for (final entry in const [
-      ('observation-1', 'capture-1', 'dent'),
+    for (final entry in [
+      ('observation-1', 'capture-1', firstObservationClass),
       ('observation-2', 'capture-2', 'scratch'),
     ]) {
       assessment = assessment.recordObservation(

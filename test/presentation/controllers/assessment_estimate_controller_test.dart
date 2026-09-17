@@ -1,4 +1,5 @@
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_estimate_controller.dart';
 import 'package:autodentifyr/services/assessment_estimate_source.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
@@ -324,7 +325,7 @@ IntakeAssessment _assessment() {
     assessment = assessment.addFinding(
       DamageFinding.manual(
         id: id,
-        vehicleComponent: 'left-front door',
+        vehicleComponentId: VehicleComponentId.leftFrontDoor,
         damageType: id == 'finding-1' ? 'dent' : 'scratch',
         supportingCaptureIds: const ['capture-1'],
         evidenceNote: 'Visible damage supported by the Capture.',

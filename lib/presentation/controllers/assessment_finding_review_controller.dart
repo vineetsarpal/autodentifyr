@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 
 enum FindingReviewPhase { idle, loading, ready, saving, loadFailed, saveFailed }
@@ -26,14 +27,14 @@ sealed class FindingReviewAction {
 class ConfirmFindingAction extends FindingReviewAction {
   const ConfirmFindingAction({
     required this.findingId,
-    required this.vehicleComponent,
+    required this.vehicleComponentId,
     required this.damageType,
     required super.reason,
     this.additionalViewOverrideReason,
   });
 
   final String findingId;
-  final String vehicleComponent;
+  final VehicleComponentId vehicleComponentId;
   final String damageType;
   final String? additionalViewOverrideReason;
 }
@@ -52,21 +53,21 @@ class DismissFindingAction extends FindingReviewAction {
 class EditFindingAction extends FindingReviewAction {
   const EditFindingAction({
     required this.findingId,
-    required this.vehicleComponent,
+    required this.vehicleComponentId,
     required this.damageType,
     required this.supportingCaptureIds,
     required super.reason,
   });
 
   final String findingId;
-  final String vehicleComponent;
+  final VehicleComponentId vehicleComponentId;
   final String damageType;
   final List<String> supportingCaptureIds;
 }
 
 class AddManualFindingAction extends FindingReviewAction {
   const AddManualFindingAction({
-    required this.vehicleComponent,
+    required this.vehicleComponentId,
     required this.damageType,
     required this.supportingCaptureIds,
     required this.evidenceNote,
@@ -74,7 +75,7 @@ class AddManualFindingAction extends FindingReviewAction {
     this.observationIds = const [],
   });
 
-  final String vehicleComponent;
+  final VehicleComponentId vehicleComponentId;
   final String damageType;
   final List<String> supportingCaptureIds;
   final String evidenceNote;
@@ -108,27 +109,27 @@ class MarkFindingUndeterminedAction extends FindingReviewAction {
 class MergeFindingsAction extends FindingReviewAction {
   const MergeFindingsAction({
     required this.findingIds,
-    required this.vehicleComponent,
+    required this.vehicleComponentId,
     required this.damageType,
     required super.reason,
     this.additionalViewOverrideReason,
   });
 
   final List<String> findingIds;
-  final String vehicleComponent;
+  final VehicleComponentId vehicleComponentId;
   final String damageType;
   final String? additionalViewOverrideReason;
 }
 
 class SplitFindingPart {
   const SplitFindingPart({
-    required this.vehicleComponent,
+    required this.vehicleComponentId,
     required this.damageType,
     required this.observationIds,
     required this.supportingCaptureIds,
   });
 
-  final String vehicleComponent;
+  final VehicleComponentId vehicleComponentId;
   final String damageType;
   final List<String> observationIds;
   final List<String> supportingCaptureIds;
@@ -330,7 +331,7 @@ class AssessmentFindingReviewController extends ChangeNotifier {
     }
     replacement = replacement.reviewed(
       state: FindingReviewState.confirmed,
-      vehicleComponent: action.vehicleComponent,
+      vehicleComponentId: action.vehicleComponentId,
       damageType: action.damageType,
       additionalViewOverrideReason: action.additionalViewOverrideReason,
     );
@@ -379,7 +380,7 @@ class AssessmentFindingReviewController extends ChangeNotifier {
                 supportingCaptureIds: part.supportingCaptureIds,
               ).reviewed(
                 state: FindingReviewState.confirmed,
-                vehicleComponent: part.vehicleComponent,
+                vehicleComponentId: part.vehicleComponentId,
                 damageType: part.damageType,
                 additionalViewOverrideReason:
                     action.additionalViewOverrideReason,
@@ -462,7 +463,7 @@ class AssessmentFindingReviewController extends ChangeNotifier {
     final replacement = action.observationIds.isEmpty
         ? DamageFinding.manual(
             id: findingId,
-            vehicleComponent: action.vehicleComponent,
+            vehicleComponentId: action.vehicleComponentId,
             damageType: action.damageType,
             supportingCaptureIds: action.supportingCaptureIds,
             evidenceNote: action.evidenceNote,
@@ -473,7 +474,7 @@ class AssessmentFindingReviewController extends ChangeNotifier {
             supportingCaptureIds: action.supportingCaptureIds,
           ).reviewed(
             state: FindingReviewState.confirmed,
-            vehicleComponent: action.vehicleComponent,
+            vehicleComponentId: action.vehicleComponentId,
             damageType: action.damageType,
           );
     return assessment.applyFindingCorrection(
@@ -496,7 +497,7 @@ class AssessmentFindingReviewController extends ChangeNotifier {
   ) {
     final original = _finding(assessment, action.findingId);
     final replacement = original.edited(
-      vehicleComponent: action.vehicleComponent,
+      vehicleComponentId: action.vehicleComponentId,
       damageType: action.damageType,
       supportingCaptureIds: action.supportingCaptureIds,
     );
@@ -546,7 +547,7 @@ class AssessmentFindingReviewController extends ChangeNotifier {
     final original = _finding(assessment, action.findingId);
     final replacement = original.reviewed(
       state: FindingReviewState.confirmed,
-      vehicleComponent: action.vehicleComponent,
+      vehicleComponentId: action.vehicleComponentId,
       damageType: action.damageType,
       additionalViewOverrideReason: action.additionalViewOverrideReason,
     );

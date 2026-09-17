@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/assessment.dart';
+import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_finding_review_controller.dart';
 import 'package:autodentifyr/presentation/widgets/assessment_evidence_selector.dart';
 import 'package:autodentifyr/presentation/widgets/vehicle_component_selector.dart';
+import 'package:autodentifyr/services/vehicle_component_detector_adapter.dart';
 
 class AssessmentFindingReviewScreen extends StatefulWidget {
   const AssessmentFindingReviewScreen({
@@ -188,15 +190,17 @@ class _AssessmentFindingReviewScreenState
               for (final observation in observations)
                 ..._buildObservationEvidence(assessment, observation),
               if (_hasAppraiserEdit(assessment, finding))
-                Text('${finding.vehicleComponent} • ${finding.damageType}')
+                Text(
+                  '${_componentLabel(finding.vehicleComponentId)} • ${finding.damageType}',
+                )
               else ...[
                 const Text('Component and damage type need Appraiser review.'),
               ],
             ] else ...[
               Text(
-                finding.vehicleComponent == null || finding.damageType == null
+                finding.vehicleComponentId == null || finding.damageType == null
                     ? 'Component and Damage Type not yet confirmed'
-                    : '${finding.vehicleComponent} • ${finding.damageType}',
+                    : '${_componentLabel(finding.vehicleComponentId)} • ${finding.damageType}',
               ),
             ],
             if (finding.hasConflictingViews) ...[
@@ -365,7 +369,7 @@ class _AssessmentFindingReviewScreenState
           'vehicleComponent',
           'Vehicle Component',
           'vehicle-component',
-          finding.vehicleComponent ?? '',
+          finding.vehicleComponentId?.wireValue ?? '',
         ),
         _Field(
           'damageType',
@@ -384,7 +388,9 @@ class _AssessmentFindingReviewScreenState
       overrideRequired: finding.additionalViewRequests.isNotEmpty,
       actionFromValues: (values) => ConfirmFindingAction(
         findingId: finding.id,
-        vehicleComponent: values['vehicleComponent']!,
+        vehicleComponentId: VehicleComponentId.fromWire(
+          values['vehicleComponent']!,
+        ),
         damageType: values['damageType']!,
         reason: values['reason']!,
         additionalViewOverrideReason: _nullable(values['override']!),
@@ -401,7 +407,7 @@ class _AssessmentFindingReviewScreenState
           'vehicleComponent',
           'Vehicle Component',
           'vehicle-component',
-          finding.vehicleComponent ?? '',
+          finding.vehicleComponentId?.wireValue ?? '',
         ),
         _Field(
           'damageType',
@@ -421,7 +427,9 @@ class _AssessmentFindingReviewScreenState
       overrideRequired: false,
       actionFromValues: (values) => EditFindingAction(
         findingId: finding.id,
-        vehicleComponent: values['vehicleComponent']!,
+        vehicleComponentId: VehicleComponentId.fromWire(
+          values['vehicleComponent']!,
+        ),
         damageType: values['damageType']!,
         supportingCaptureIds: _csv(values['captures']!),
         reason: values['reason']!,
@@ -470,7 +478,9 @@ class _AssessmentFindingReviewScreenState
       },
       overrideRequired: false,
       actionFromValues: (values) => AddManualFindingAction(
-        vehicleComponent: values['vehicleComponent']!,
+        vehicleComponentId: VehicleComponentId.fromWire(
+          values['vehicleComponent']!,
+        ),
         damageType: values['damageType']!,
         supportingCaptureIds: _csv(values['captures']!),
         observationIds: _csv(values['observations']!),
@@ -635,7 +645,9 @@ class _AssessmentFindingReviewScreenState
       ),
       actionFromValues: (values) => MergeFindingsAction(
         findingIds: _selectedFindingIds.toList(),
-        vehicleComponent: values['vehicleComponent']!,
+        vehicleComponentId: VehicleComponentId.fromWire(
+          values['vehicleComponent']!,
+        ),
         damageType: values['damageType']!,
         reason: values['reason']!,
         additionalViewOverrideReason: _nullable(values['override']!),
@@ -691,13 +703,17 @@ class _AssessmentFindingReviewScreenState
         findingId: finding.id,
         parts: [
           SplitFindingPart(
-            vehicleComponent: values['part1Component']!,
+            vehicleComponentId: VehicleComponentId.fromWire(
+              values['part1Component']!,
+            ),
             damageType: values['part1Type']!,
             observationIds: _csv(values['part1Observations']!),
             supportingCaptureIds: _csv(values['part1Captures']!),
           ),
           SplitFindingPart(
-            vehicleComponent: values['part2Component']!,
+            vehicleComponentId: VehicleComponentId.fromWire(
+              values['part2Component']!,
+            ),
             damageType: values['part2Type']!,
             observationIds: _csv(values['part2Observations']!),
             supportingCaptureIds: _csv(values['part2Captures']!),
@@ -717,11 +733,32 @@ class _AssessmentFindingReviewScreenState
     required bool overrideRequired,
     required FindingReviewAction Function(Map<String, String>) actionFromValues,
   }) async {
+    final assessment = widget.controller.state.assessment!;
+    final componentIsSuggestion =
+        title == 'Confirm Finding' &&
+        finding?.reviewState == FindingReviewState.proposed;
+    final hasExistingComponent = finding?.vehicleComponentId != null;
+    final detectorResult =
+        componentIsSuggestion && !hasExistingComponent && finding != null
+        ? VehicleComponentDetectorAdapter.resolveAll(
+            finding.observationIds.map(
+              (observationId) => assessment.observations
+                  .firstWhere((observation) => observation.id == observationId)
+                  .rawClass,
+            ),
+          )
+        : null;
     final controllers = {
       for (final field in fields)
-        field.name: TextEditingController(text: field.initial),
+        field.name: TextEditingController(
+          text:
+              componentIsSuggestion &&
+                  !hasExistingComponent &&
+                  field.name == 'vehicleComponent'
+              ? ''
+              : field.initial,
+        ),
     };
-    final assessment = widget.controller.state.assessment!;
     final formKey = GlobalKey<FormState>();
     String? saveError;
     var saving = false;
@@ -753,9 +790,25 @@ class _AssessmentFindingReviewScreenState
                             ? VehicleComponentSelector(
                                 key: Key(field.keyName),
                                 label: field.label,
-                                initialValue: field.initial,
+                                value:
+                                    componentIsSuggestion &&
+                                        !hasExistingComponent &&
+                                        field.name == 'vehicleComponent'
+                                    ? null
+                                    : field.initial.isEmpty
+                                    ? null
+                                    : VehicleComponentId.fromWire(
+                                        field.initial,
+                                      ),
+                                detectorResult:
+                                    componentIsSuggestion &&
+                                        !hasExistingComponent &&
+                                        field.name == 'vehicleComponent'
+                                    ? detectorResult
+                                    : null,
                                 onChanged: (value) =>
-                                    controllers[field.name]!.text = value,
+                                    controllers[field.name]!.text =
+                                        value.wireValue,
                               )
                             : field.name == 'captures' ||
                                   field.name.endsWith('Captures')
@@ -939,6 +992,10 @@ class _AssessmentFindingReviewScreenState
         ),
       );
 }
+
+String _componentLabel(VehicleComponentId? id) => id == null
+    ? 'Component not selected'
+    : VehicleComponentCatalog.byId(id).label;
 
 class _ObservationEvidenceViewer extends StatelessWidget {
   const _ObservationEvidenceViewer({

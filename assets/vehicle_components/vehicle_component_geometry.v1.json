@@ -1,0 +1,233 @@
+{
+  "contractVersion": "1.0.0",
+  "assetId": "autodentifyr.vehicle-component-geometry",
+  "coordinateSystem": {
+    "unit": "normalized",
+    "width": 1000,
+    "height": 600,
+    "pathFormat": "svg-path-data",
+    "origin": "top-left",
+    "rule": "Every visual path, hit path, focus bound, and semantic bound must use this coordinate system before a single shared view transform is applied."
+  },
+  "views": [
+    {
+      "id": "top",
+      "title": "Top",
+      "composition": {
+        "silhouettePath": "M330 35 C245 65 195 160 185 300 C195 440 245 535 330 565 L670 565 C755 535 805 440 815 300 C805 160 755 65 670 35 Z",
+        "decorativePaths": [
+          {"id": "top-glass", "path": "M370 130 C335 170 320 235 320 300 C320 365 335 430 370 470 L630 470 C665 430 680 365 680 300 C680 235 665 170 630 130 Z"},
+          {"id": "top-beltline", "path": "M255 300 L745 300"},
+          {"id": "top-left-wheel", "path": "M190 175 L250 175 L250 265 L190 265 Z M190 335 L250 335 L250 425 L190 425 Z"},
+          {"id": "top-right-wheel", "path": "M750 175 L810 175 L810 265 L750 265 Z M750 335 L810 335 L810 425 L750 425 Z"}
+        ]
+      },
+      "occurrences": [
+        {
+          "componentId": "roof",
+          "visualPath": "M370 155 C345 195 335 245 335 300 C335 355 345 405 370 445 L630 445 C655 405 665 355 665 300 C665 245 655 195 630 155 Z",
+          "hitPath": "M340 125 C310 170 300 235 300 300 C300 365 310 430 340 475 L660 475 C690 430 700 365 700 300 C700 235 690 170 660 125 Z",
+          "semanticsOrder": 1
+        }
+      ]
+    },
+    {
+      "id": "front",
+      "title": "Front",
+      "composition": {
+        "silhouettePath": "M140 540 L175 430 L235 355 L305 115 C320 70 370 45 500 45 C630 45 680 70 695 115 L765 355 L825 430 L860 540 Z",
+        "decorativePaths": [
+          {"id": "front-roof-glass", "path": "M330 115 C350 85 405 75 500 75 C595 75 650 85 670 115 L710 250 L290 250 Z"},
+          {"id": "front-body-seam", "path": "M235 355 L765 355 M175 430 L825 430"},
+          {"id": "front-left-wheel", "path": "M155 465 C155 420 190 395 225 400 L225 540 L155 540 Z"},
+          {"id": "front-right-wheel", "path": "M845 465 C845 420 810 395 775 400 L775 540 L845 540 Z"}
+        ]
+      },
+      "occurrences": [
+        {
+          "componentId": "front_bumper",
+          "visualPath": "M175 435 L825 435 L860 540 L140 540 Z",
+          "hitPath": "M145 405 L855 405 L895 570 L105 570 Z",
+          "semanticsOrder": 1
+        },
+        {
+          "componentId": "hood",
+          "visualPath": "M305 265 L695 265 L765 355 L235 355 Z",
+          "hitPath": "M280 235 L720 235 L805 375 L195 375 Z",
+          "semanticsOrder": 2
+        },
+        {
+          "componentId": "left_headlight",
+          "visualPath": "M220 365 L360 365 L325 425 L190 420 Z",
+          "hitPath": "M175 335 L400 335 L355 455 L150 450 Z",
+          "semanticsOrder": 3
+        },
+        {
+          "componentId": "right_headlight",
+          "visualPath": "M640 365 L780 365 L810 420 L675 425 Z",
+          "hitPath": "M600 335 L825 335 L850 450 L645 455 Z",
+          "semanticsOrder": 4
+        },
+        {
+          "componentId": "left_front_fender",
+          "visualPath": "M235 355 L305 115 L330 265 L360 365 L220 365 Z",
+          "hitPath": "M200 330 L275 90 L370 90 L395 390 L185 390 Z",
+          "semanticsOrder": 5
+        },
+        {
+          "componentId": "right_front_fender",
+          "visualPath": "M695 115 L765 355 L780 365 L640 365 L670 265 Z",
+          "hitPath": "M630 90 L725 90 L800 330 L815 390 L605 390 Z",
+          "semanticsOrder": 6
+        },
+        {
+          "componentId": "front_windscreen",
+          "visualPath": "M330 115 C350 85 405 75 500 75 C595 75 650 85 670 115 L710 250 L290 250 Z",
+          "hitPath": "M300 85 C330 45 390 40 500 40 C610 40 670 45 700 85 L750 280 L250 280 Z",
+          "semanticsOrder": 7
+        }
+      ]
+    },
+    {
+      "id": "rear",
+      "title": "Rear",
+      "composition": {
+        "silhouettePath": "M140 540 L175 430 L235 355 L305 115 C320 70 370 45 500 45 C630 45 680 70 695 115 L765 355 L825 430 L860 540 Z",
+        "decorativePaths": [
+          {"id": "rear-glass", "path": "M330 115 C350 85 405 75 500 75 C595 75 650 85 670 115 L710 250 L290 250 Z"},
+          {"id": "rear-body-seam", "path": "M235 355 L765 355 M175 430 L825 430"},
+          {"id": "rear-left-wheel", "path": "M155 465 C155 420 190 395 225 400 L225 540 L155 540 Z"},
+          {"id": "rear-right-wheel", "path": "M845 465 C845 420 810 395 775 400 L775 540 L845 540 Z"}
+        ]
+      },
+      "occurrences": [
+        {
+          "componentId": "trunk_lid",
+          "visualPath": "M305 265 L695 265 L765 355 L235 355 Z",
+          "hitPath": "M280 235 L720 235 L805 375 L195 375 Z",
+          "semanticsOrder": 1
+        },
+        {
+          "componentId": "tailgate",
+          "visualPath": "M270 360 L730 360 L780 430 L220 430 Z",
+          "hitPath": "M230 335 L770 335 L825 455 L175 455 Z",
+          "semanticsOrder": 2
+        },
+        {
+          "componentId": "left_taillight",
+          "visualPath": "M190 420 L325 425 L360 365 L220 365 Z",
+          "hitPath": "M150 390 L355 395 L400 455 L175 455 Z",
+          "semanticsOrder": 3
+        },
+        {
+          "componentId": "right_taillight",
+          "visualPath": "M640 365 L780 365 L810 420 L675 425 Z",
+          "hitPath": "M600 395 L850 390 L825 455 L645 455 Z",
+          "semanticsOrder": 4
+        },
+        {
+          "componentId": "rear_bumper",
+          "visualPath": "M175 435 L825 435 L860 540 L140 540 Z",
+          "hitPath": "M145 405 L855 405 L895 570 L105 570 Z",
+          "semanticsOrder": 5
+        },
+        {
+          "componentId": "rear_windscreen",
+          "visualPath": "M330 115 C350 85 405 75 500 75 C595 75 650 85 670 115 L710 250 L290 250 Z",
+          "hitPath": "M300 85 C330 45 390 40 500 40 C610 40 670 45 700 85 L750 280 L250 280 Z",
+          "semanticsOrder": 6
+        }
+      ]
+    },
+    {
+      "id": "left",
+      "title": "Left",
+      "composition": {
+        "silhouettePath": "M90 430 L130 365 L250 330 L350 135 C375 95 440 75 560 75 C670 75 730 105 770 175 L850 340 L910 385 L925 430 Z",
+        "decorativePaths": [
+          {"id": "left-window-line", "path": "M350 145 L450 145 L450 315 L275 315 Z M465 145 L650 150 L750 315 L465 315 Z"},
+          {"id": "left-wheel-front", "path": "M220 430 C220 365 275 340 330 365 C360 380 375 405 375 430 Z"},
+          {"id": "left-wheel-rear", "path": "M675 430 C675 365 730 340 785 365 C815 380 830 405 830 430 Z"},
+          {"id": "left-beltline", "path": "M130 365 L850 365"}
+        ]
+      },
+      "occurrences": [
+        {
+          "componentId": "left_mirror",
+          "visualPath": "M300 250 L245 250 L215 285 L300 300 Z",
+          "hitPath": "M320 220 L230 220 L175 275 L230 325 L320 335 Z",
+          "semanticsOrder": 1
+        },
+        {
+          "componentId": "left_front_door",
+          "visualPath": "M350 150 L465 150 L465 365 L275 365 L305 270 Z",
+          "hitPath": "M325 125 L490 125 L490 390 L245 390 L275 250 Z",
+          "semanticsOrder": 2
+        },
+        {
+          "componentId": "left_rear_door",
+          "visualPath": "M465 150 L650 155 L750 365 L465 365 Z",
+          "hitPath": "M440 125 L675 130 L785 390 L440 390 Z",
+          "semanticsOrder": 3
+        },
+        {
+          "componentId": "left_rear_quarter_panel",
+          "visualPath": "M750 315 L850 340 L910 385 L925 430 L825 430 L750 365 Z",
+          "hitPath": "M725 285 L875 305 L940 360 L960 455 L800 455 L725 390 Z",
+          "semanticsOrder": 4
+        },
+        {
+          "componentId": "left_running_board",
+          "visualPath": "M275 385 L770 385 L805 430 L235 430 Z",
+          "hitPath": "M245 360 L795 360 L840 455 L200 455 Z",
+          "semanticsOrder": 5
+        }
+      ]
+    },
+    {
+      "id": "right",
+      "title": "Right",
+      "composition": {
+        "silhouettePath": "M910 430 L870 365 L750 330 L650 135 C625 95 560 75 440 75 C330 75 270 105 230 175 L150 340 L90 385 L75 430 Z",
+        "decorativePaths": [
+          {"id": "right-window-line", "path": "M650 145 L550 145 L550 315 L725 315 Z M535 145 L350 150 L250 315 L535 315 Z"},
+          {"id": "right-wheel-front", "path": "M780 430 C780 365 725 340 670 365 C640 380 625 405 625 430 Z"},
+          {"id": "right-wheel-rear", "path": "M325 430 C325 365 270 340 215 365 C185 380 170 405 170 430 Z"},
+          {"id": "right-beltline", "path": "M870 365 L150 365"}
+        ]
+      },
+      "occurrences": [
+        {
+          "componentId": "right_mirror",
+          "visualPath": "M700 250 L755 250 L785 285 L700 300 Z",
+          "hitPath": "M680 220 L770 220 L825 275 L770 325 L680 335 Z",
+          "semanticsOrder": 1
+        },
+        {
+          "componentId": "right_front_door",
+          "visualPath": "M650 150 L535 150 L535 365 L725 365 L695 270 Z",
+          "hitPath": "M675 125 L510 125 L510 390 L755 390 L725 250 Z",
+          "semanticsOrder": 2
+        },
+        {
+          "componentId": "right_rear_door",
+          "visualPath": "M535 150 L350 155 L250 365 L535 365 Z",
+          "hitPath": "M560 125 L325 130 L215 390 L560 390 Z",
+          "semanticsOrder": 3
+        },
+        {
+          "componentId": "right_rear_quarter_panel",
+          "visualPath": "M250 315 L150 340 L90 385 L75 430 L175 430 L250 365 Z",
+          "hitPath": "M275 285 L125 305 L60 360 L40 455 L200 455 L275 390 Z",
+          "semanticsOrder": 4
+        },
+        {
+          "componentId": "right_running_board",
+          "visualPath": "M725 385 L230 385 L195 430 L765 430 Z",
+          "hitPath": "M755 360 L205 360 L160 455 L800 455 Z",
+          "semanticsOrder": 5
+        }
+      ]
+    }
+  ]
+}
