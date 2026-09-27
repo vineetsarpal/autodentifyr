@@ -10,6 +10,524 @@ import 'fail_next_assessment_save_repository.dart';
 
 void main() {
   group('AssessmentFindingReviewScreen', () {
+    testWidgets('Review Findings starts as a focused review queue', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Finding 1 of 2'), findsOneWidget);
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('finding-observation-image-observation-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-2')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('finding-observation-image-observation-2')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('not-damage-proposed-observation-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Vehicle condition'), findsNothing);
+      expect(find.text('Reviewed (0)'), findsNothing);
+      expect(find.byType(Checkbox), findsNothing);
+      expect(find.byKey(const Key('merge-selected')), findsNothing);
+    });
+
+    testWidgets('Confirm and next accepts an exact suggestion in one tap', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      final persisted = (await harness.repository.findById('assessment-1'))!;
+      final confirmed = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
+      );
+      expect(confirmed.reviewState, FindingReviewState.confirmed);
+      expect(confirmed.vehicleComponentId, VehicleComponentId.frontBumper);
+      expect(confirmed.damageType, 'front-bumper-dent');
+      expect(
+        persisted.corrections.single.reason,
+        'Appraiser confirmed the displayed component and damage type.',
+      );
+      expect(find.text('Finding 1 of 1'), findsOneWidget);
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-1')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Not damage dismisses with a compact reason choice', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('not-damage-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dismiss Finding'), findsNothing);
+      final reflection = find.byKey(const Key('dismiss-reason-reflection'));
+      expect(reflection, findsOneWidget);
+      await tester.tap(reflection);
+      await tester.pumpAndSettle();
+
+      final persisted = (await harness.repository.findById('assessment-1'))!;
+      final dismissed = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
+      );
+      expect(dismissed.reviewState, FindingReviewState.dismissed);
+      expect(persisted.corrections.single.reason, 'Reflection');
+      expect(find.text('Finding 1 of 1'), findsOneWidget);
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-1')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Assessment and finding actions use separate menus', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      for (final legacyAction in [
+        'Confirm',
+        'Edit',
+        'Dismiss',
+        'Uncertainty',
+        'Undetermined',
+        'Split',
+      ]) {
+        expect(find.text(legacyAction), findsNothing);
+      }
+
+      await tester.tap(find.byKey(const Key('assessment-actions-menu')));
+      await tester.pumpAndSettle();
+      expect(find.text('Add finding'), findsOneWidget);
+      expect(find.text('Merge findings'), findsOneWidget);
+      expect(find.text('View vehicle map'), findsOneWidget);
+
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('finding-more-actions-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Need more evidence'), findsOneWidget);
+      expect(find.text('Cannot determine'), findsOneWidget);
+      expect(find.text('Split finding'), findsOneWidget);
+    });
+
+    testWidgets(
+      'Merge findings is hidden when fewer than two eligible findings remain',
+      (tester) async {
+        final harness = await _Harness.create();
+        await tester.pumpWidget(harness.widget);
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('not-damage-proposed-observation-1')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('dismiss-reason-reflection')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('assessment-actions-menu')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Add finding'), findsOneWidget);
+        expect(find.text('Merge findings'), findsNothing);
+        expect(find.text('View vehicle map'), findsOneWidget);
+      },
+    );
+
+    testWidgets('Reviewed findings stay collapsed until requested', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+
+      final reviewedSection = find.byKey(const Key('reviewed-findings'));
+      expect(reviewedSection, findsOneWidget);
+      expect(find.text('Reviewed (1)'), findsOneWidget);
+      expect(find.text('Front bumper • front-bumper-dent'), findsNothing);
+      expect(find.text('Confirmed'), findsNothing);
+
+      await tester.tap(reviewedSection);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Front bumper • front-bumper-dent'), findsOneWidget);
+      expect(find.text('Confirmed'), findsOneWidget);
+    });
+
+    testWidgets('Dismissed finding can be reopened and confirmed', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('not-damage-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('dismiss-reason-reflection')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('reviewed-findings')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('reviewed-finding-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review finding'), findsOneWidget);
+      expect(
+        find.byKey(const Key('dialog-evidence-proposed-observation-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('component-selector-Vehicle Component')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('damage-type')), findsOneWidget);
+
+      await _selectComponent(tester, 'Vehicle Component', 'left-front door');
+      await tester.enterText(find.byKey(const Key('damage-type')), 'dent');
+      await tester.enterText(
+        find.byKey(const Key('reason')),
+        'Confirmed after reviewing the dismissed finding.',
+      );
+      await tester.tap(find.byKey(const Key('submit-action')));
+      await tester.pumpAndSettle();
+
+      final persisted = (await harness.repository.findById('assessment-1'))!;
+      final finding = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
+      );
+      expect(finding.reviewState, FindingReviewState.confirmed);
+      expect(finding.vehicleComponentId, VehicleComponentId.leftFrontDoor);
+      expect(finding.damageType, 'dent');
+      expect(persisted.corrections.map((correction) => correction.kind), [
+        AssessmentCorrectionKind.dismiss,
+        AssessmentCorrectionKind.confirm,
+      ]);
+      expect(persisted.corrections.map((correction) => correction.reason), [
+        'Reflection',
+        'Confirmed after reviewing the dismissed finding.',
+      ]);
+    });
+
+    testWidgets('Continue unlocks after every finding is reviewed', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      var continueCalls = 0;
+      await tester.pumpWidget(
+        harness.widgetWithContinue(() => continueCalls++),
+      );
+      await tester.pumpAndSettle();
+
+      final continueButton = find.byKey(const Key('continue-assessment'));
+      expect(find.text('Review 2 remaining'), findsOneWidget);
+      expect(tester.widget<FilledButton>(continueButton).onPressed, isNull);
+
+      await tester.tap(
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('not-damage-proposed-observation-2')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('dismiss-reason-reflection')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Continue to severity'), findsOneWidget);
+      expect(tester.widget<FilledButton>(continueButton).onPressed, isNotNull);
+      await tester.tap(continueButton);
+      await tester.pump();
+      expect(continueCalls, 1);
+    });
+
+    testWidgets('Focused suggestion chips open the finding editor', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      final componentChip = find.byKey(const Key('focused-component'));
+      final damageTypeChip = find.byKey(const Key('focused-damage-type'));
+      expect(componentChip, findsOneWidget);
+      expect(
+        find.descendant(of: componentChip, matching: find.text('Front bumper')),
+        findsOneWidget,
+      );
+      expect(damageTypeChip, findsOneWidget);
+      expect(
+        find.descendant(
+          of: damageTypeChip,
+          matching: find.text('front-bumper-dent'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(componentChip);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review finding'), findsOneWidget);
+      expect(
+        find.byKey(const Key('component-selector-Vehicle Component')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('damage-type')), findsOneWidget);
+    });
+
+    testWidgets('Merge findings enters a two-selection mode', (tester) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('assessment-actions-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Merge findings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select findings'), findsOneWidget);
+      expect(find.byKey(const Key('cancel-merge-mode')), findsOneWidget);
+      final firstSelection = find.byKey(
+        const Key('select-proposed-observation-1'),
+      );
+      final secondSelection = find.byKey(
+        const Key('select-proposed-observation-2'),
+      );
+      expect(firstSelection, findsOneWidget);
+      expect(secondSelection, findsOneWidget);
+      expect(find.byType(Checkbox), findsNWidgets(2));
+
+      final mergeButton = find.byKey(const Key('merge-selected'));
+      expect(mergeButton, findsOneWidget);
+      expect(tester.widget<ButtonStyleButton>(mergeButton).onPressed, isNull);
+      await tester.tap(firstSelection);
+      await tester.pump();
+      expect(tester.widget<ButtonStyleButton>(mergeButton).onPressed, isNull);
+      await tester.tap(secondSelection);
+      await tester.pump();
+      expect(
+        tester.widget<ButtonStyleButton>(mergeButton).onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('Quick confirm stays retryable after a save failure', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      final confirm = find.byKey(
+        const Key('confirm-and-next-proposed-observation-1'),
+      );
+      harness.repository.failNextSave = true;
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Device storage is temporarily unavailable.'),
+        findsOneWidget,
+      );
+      expect(confirm, findsOneWidget);
+
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Finding 1 of 1'), findsOneWidget);
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('focused-finding-proposed-observation-1')),
+        findsNothing,
+      );
+    });
+
+    testWidgets(
+      'manual finding chooses a component full-screen before showing fields',
+      (tester) async {
+        final harness = await _Harness.create();
+        await tester.pumpWidget(harness.widget);
+        await tester.pumpAndSettle();
+
+        await _openAssessmentAction(tester, 'Add finding');
+        expect(find.text('Select vehicle component'), findsOneWidget);
+        await _chooseTopMapComponent(tester, 'Hood');
+        await tester.tap(find.text('Use Hood'));
+        await tester.pumpAndSettle();
+
+        final hoodId = VehicleComponentCatalog.all
+            .singleWhere((component) => component.label == 'Hood')
+            .id;
+        final persisted = await harness.repository.findById('assessment-1');
+        expect(
+          persisted!.findings.where(
+            (finding) => finding.vehicleComponentId == hoodId,
+          ),
+          isEmpty,
+        );
+
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Add manual Finding'),
+          ),
+          findsOneWidget,
+        );
+        final componentSelector = find.byKey(
+          const Key('component-selector-Vehicle Component'),
+        );
+        expect(
+          find.descendant(of: componentSelector, matching: find.text('Hood')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('Change component preserves unfinished manual form values', (
+      tester,
+    ) async {
+      final harness = await _Harness.create();
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await _openAssessmentAction(tester, 'Add finding');
+      await _chooseTopMapComponent(tester, 'Hood');
+      await tester.tap(find.text('Use Hood'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('damage-type')), 'scratch');
+      await tester.enterText(
+        find.byKey(const Key('evidence-note')),
+        'Visible near the edge.',
+      );
+      await tester.enterText(find.byKey(const Key('reason')), 'Manual review.');
+
+      await _selectComponent(tester, 'Vehicle Component', 'roof');
+
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('damage-type')))
+            .controller!
+            .text,
+        'scratch',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('evidence-note')))
+            .controller!
+            .text,
+        'Visible near the edge.',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('reason')))
+            .controller!
+            .text,
+        'Manual review.',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('component-selector-Vehicle Component')),
+          matching: find.text('Roof'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('map evidence action opens the existing observation viewer', (
+      tester,
+    ) async {
+      final harness = await _Harness.create(
+        firstObservationClass: 'front-bumper-dent',
+      );
+      await tester.pumpWidget(harness.widget);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
+      await tester.pumpAndSettle();
+
+      await _openAssessmentAction(tester, 'View vehicle map');
+      await _chooseTopMapComponent(tester, 'Front bumper');
+      final viewEvidence = find.byTooltip('View evidence');
+      await _tapVisible(tester, viewEvidence);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Model evidence'), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(
+        find.byKey(const Key('finding-observation-bounds-observation-1')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('Appraiser sees model evidence before reviewing a Finding', (
       tester,
     ) async {
@@ -17,22 +535,7 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
-      final selectionRow = find.byKey(
-        const Key('selection-row-proposed-observation-1'),
-      );
-      expect(
-        find.descendant(of: selectionRow, matching: find.byType(Checkbox)),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: selectionRow, matching: find.byType(Text)),
-        findsOneWidget,
-      );
-      final proposedStatus = find.byKey(
-        const Key('status-proposed-observation-1'),
-      );
       final modelObservation = find.text('Suggested dent • 80.0% confidence');
-      expect(proposedStatus, findsOneWidget);
       expect(modelObservation, findsOneWidget);
       final firstCaptureImage = tester.widget<Image>(
         find.byKey(const Key('finding-observation-image-observation-1')),
@@ -48,13 +551,10 @@ void main() {
       );
       expect(
         find.byKey(const Key('finding-thumbnail-bounds-observation-2')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text('Camera still • photo capture-1'), findsOneWidget);
-      expect(
-        find.text('Component and damage type need Appraiser review.'),
-        findsNWidgets(2),
-      );
+      expect(find.text('Camera still'), findsOneWidget);
+      expect(find.text('Camera still • photo capture-1'), findsNothing);
     });
 
     testWidgets('Appraiser enlarges a Capture with its model bounds', (
@@ -64,7 +564,8 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
-      await tester.tap(
+      await _tapVisible(
+        tester,
         find.byKey(const Key('open-finding-observation-observation-1')),
       );
       await tester.pumpAndSettle();
@@ -82,29 +583,6 @@ void main() {
       expect(find.text('Model evidence'), findsNothing);
     });
 
-    testWidgets('Appraiser sees which Finding is selected for merging', (
-      tester,
-    ) async {
-      final harness = await _Harness.create();
-      await tester.pumpWidget(harness.widget);
-      await tester.pumpAndSettle();
-
-      final cardFinder = find.byKey(
-        const Key('finding-card-proposed-observation-1'),
-      );
-      expect(tester.widget<Card>(cardFinder).color, isNull);
-
-      await tester.tap(find.byKey(const Key('select-proposed-observation-1')));
-      await tester.pump();
-
-      final selectedCard = tester.widget<Card>(cardFinder);
-      final colorScheme = Theme.of(tester.element(cardFinder)).colorScheme;
-      expect(selectedCard.color, colorScheme.primary.withValues(alpha: 0.18));
-      final selectedShape = selectedCard.shape! as RoundedRectangleBorder;
-      expect(selectedShape.side.color, colorScheme.primary);
-      expect(selectedShape.side.width, 2);
-    });
-
     testWidgets('Appraiser confirms a Proposed Finding with required values', (
       tester,
     ) async {
@@ -112,8 +590,11 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
-      expect(find.text('2 Proposed'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      expect(find.text('Finding 1 of 2'), findsOneWidget);
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const Key('dialog-evidence-proposed-observation-1')),
@@ -135,8 +616,17 @@ void main() {
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const Key('reviewed-findings')));
+      await tester.pumpAndSettle();
       expect(find.text('Confirmed'), findsOneWidget);
       expect(find.text('Left front door • dent'), findsOneWidget);
+      final persisted = (await harness.repository.findById('assessment-1'))!;
+      final confirmed = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
+      );
+      expect(confirmed.reviewState, FindingReviewState.confirmed);
+      expect(confirmed.vehicleComponentId, VehicleComponentId.leftFrontDoor);
+      expect(confirmed.damageType, 'dent');
     });
 
     testWidgets('Confirm derives an exact detector suggestion from evidence', (
@@ -148,15 +638,16 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      await tester.tap(find.byKey(const Key('focused-component')));
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const Key('component-selector-Vehicle Component')),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Part: No component selected'), findsOneWidget);
+      expect(find.text('No component selected'), findsOneWidget);
       expect(find.text('Suggested: Front bumper'), findsOneWidget);
+      expect(find.text('80.0% confidence'), findsOneWidget);
     });
 
     testWidgets('Confirm presents detector candidates', (tester) async {
@@ -165,16 +656,16 @@ void main() {
       );
       await tester.pumpWidget(candidateHarness.widget);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const Key('component-selector-Vehicle Component')),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.text('Choose one of these suggested components'),
-        findsOneWidget,
-      );
+      expect(find.text('Suggested components'), findsOneWidget);
       expect(
         find.byKey(const Key('candidate-component-left_headlight')),
         findsOneWidget,
@@ -191,30 +682,31 @@ void main() {
       final unknownHarness = await _Harness.create();
       await tester.pumpWidget(unknownHarness.widget);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('confirm-proposed-observation-1')));
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const Key('component-selector-Vehicle Component')),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Part: No component selected'), findsOneWidget);
+      expect(find.text('No component selected'), findsOneWidget);
       expect(find.text('Suggested: Dent'), findsNothing);
-      expect(
-        tester
-            .widget<ChoiceChip>(find.byKey(const Key('picker-view-top')))
-            .selected,
-        isTrue,
-      );
+      expect(find.byType(ChoiceChip), findsNothing);
     });
 
-    testWidgets('Appraiser edits, dismisses, and manually adds Findings', (
+    testWidgets('Appraiser corrects, dismisses, and manually adds Findings', (
       tester,
     ) async {
       final harness = await _Harness.create();
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('edit-proposed-observation-1')));
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('confirm-and-next-proposed-observation-1')),
+      );
       await tester.pumpAndSettle();
       await _selectComponent(tester, 'Vehicle Component', 'left-front fender');
       await tester.enterText(find.byKey(const Key('damage-type')), 'crease');
@@ -224,14 +716,19 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      expect(find.text('Left front fender • crease'), findsOneWidget);
-
-      final dismissButton = find.byKey(
-        const Key('dismiss-proposed-observation-2'),
+      var persisted = (await harness.repository.findById('assessment-1'))!;
+      final corrected = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
       );
-      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      expect(corrected.reviewState, FindingReviewState.confirmed);
+      expect(corrected.vehicleComponentId, VehicleComponentId.leftFrontFender);
+      expect(corrected.damageType, 'crease');
+
+      await tester.tap(
+        find.byKey(const Key('not-damage-proposed-observation-2')),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(dismissButton);
+      await tester.tap(find.byKey(const Key('dismiss-reason-other')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('reason')),
@@ -239,11 +736,17 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      expect(find.text('Dismissed'), findsOneWidget);
+      persisted = (await harness.repository.findById('assessment-1'))!;
+      final dismissed = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-2',
+      );
+      expect(dismissed.reviewState, FindingReviewState.dismissed);
+      expect(persisted.corrections.last.reason, 'Reflection only.');
 
-      await tester.tap(find.byKey(const Key('add-manual-finding')));
+      await _openAssessmentAction(tester, 'Add finding');
+      await _chooseTopMapComponent(tester, 'Hood');
+      await tester.tap(find.text('Use Hood'));
       await tester.pumpAndSettle();
-      await _selectComponent(tester, 'Vehicle Component', 'hood');
       await tester.enterText(find.byKey(const Key('damage-type')), 'scratch');
       await _selectCapture(tester, 'capture-1');
       await tester.enterText(
@@ -253,8 +756,14 @@ void main() {
       await tester.enterText(find.byKey(const Key('reason')), 'Manual review.');
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Hood • scratch'), 300);
-      expect(find.text('Hood • scratch'), findsOneWidget);
+      persisted = (await harness.repository.findById('assessment-1'))!;
+      final manual = persisted.findings.singleWhere(
+        (finding) => finding.manualEvidenceNote != null,
+      );
+      expect(manual.reviewState, FindingReviewState.confirmed);
+      expect(manual.vehicleComponentId, VehicleComponentId.hood);
+      expect(manual.damageType, 'scratch');
+      expect(manual.manualEvidenceNote, 'Scratch visible near the hood edge.');
     });
 
     testWidgets('Appraiser records uncertainty and an Undetermined outcome', (
@@ -264,10 +773,11 @@ void main() {
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const Key('uncertainty-proposed-observation-1')),
+      await _openFindingAction(
+        tester,
+        'proposed-observation-1',
+        'Need more evidence',
       );
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('conflicting-views')));
       await tester.enterText(
         find.byKey(const Key('additional-views')),
@@ -279,43 +789,59 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      expect(find.text('Conflicting views'), findsOneWidget);
-      expect(
-        find.text('Capture an oblique view of the left-front door.'),
-        findsOneWidget,
+      var persisted = (await harness.repository.findById('assessment-1'))!;
+      var finding = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
       );
+      expect(finding.hasConflictingViews, isTrue);
+      expect(finding.additionalViewRequests, [
+        'Capture an oblique view of the left-front door.',
+      ]);
 
-      await tester.tap(
-        find.byKey(const Key('undetermined-proposed-observation-1')),
+      await _openFindingAction(
+        tester,
+        'proposed-observation-1',
+        'Cannot determine',
       );
-      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('reason')),
         'Available evidence does not support a conclusion.',
       );
+      await tester.enterText(
+        find.byKey(const Key('override-reason')),
+        'No further capture is available.',
+      );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
+      persisted = (await harness.repository.findById('assessment-1'))!;
+      finding = persisted.findings.singleWhere(
+        (finding) => finding.id == 'proposed-observation-1',
+      );
+      expect(finding.reviewOutcome, FindingReviewOutcome.undetermined);
       expect(
-        tester
-            .widget<Text>(
-              find.byKey(const Key('status-proposed-observation-1')),
-            )
-            .data,
-        'Undetermined',
+        finding.additionalViewOverrideReason,
+        'No further capture is available.',
       );
     });
 
     testWidgets('Appraiser explicitly merges and splits Findings', (
       tester,
     ) async {
-      final harness = await _Harness.create();
-      await tester.pumpWidget(harness.widget);
+      final mergeHarness = await _Harness.create();
+      await tester.pumpWidget(mergeHarness.widget);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('select-proposed-observation-1')));
-      await tester.tap(find.byKey(const Key('select-proposed-observation-2')));
+      await _openAssessmentAction(tester, 'Merge findings');
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('select-proposed-observation-1')),
+      );
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('select-proposed-observation-2')),
+      );
       await tester.pump();
-      await tester.tap(find.byKey(const Key('merge-selected')));
+      await _tapVisible(tester, find.byKey(const Key('merge-selected')));
       await tester.pumpAndSettle();
       await _selectComponent(tester, 'Vehicle Component', 'left-front door');
       await tester.enterText(
@@ -328,10 +854,26 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
-      expect(find.text('Left front door • surface damage'), findsOneWidget);
+      final mergedAssessment = (await mergeHarness.repository.findById(
+        'assessment-1',
+      ))!;
+      expect(mergedAssessment.findings, hasLength(1));
+      expect(
+        mergedAssessment.findings.single.vehicleComponentId,
+        VehicleComponentId.leftFrontDoor,
+      );
+      expect(mergedAssessment.findings.single.damageType, 'surface damage');
+      expect(mergedAssessment.findings.single.observationIds, [
+        'observation-1',
+        'observation-2',
+      ]);
 
-      await tester.tap(find.byKey(const Key('split-generated-0')));
+      final splitHarness = await _Harness.create(combinedFinding: true);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(splitHarness.widget);
       await tester.pumpAndSettle();
+      await _openFindingAction(tester, 'combined-finding', 'Split finding');
       await _selectComponent(
         tester,
         'First Vehicle Component',
@@ -363,8 +905,21 @@ void main() {
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Left front door • dent'), findsOneWidget);
-      expect(find.text('Left front door • scratch'), findsOneWidget);
+      final splitAssessment = (await splitHarness.repository.findById(
+        'assessment-1',
+      ))!;
+      expect(splitAssessment.findings, hasLength(2));
+      expect(splitAssessment.findings.map((finding) => finding.damageType), [
+        'dent',
+        'scratch',
+      ]);
+      expect(
+        splitAssessment.findings.map((finding) => finding.observationIds),
+        [
+          ['observation-1'],
+          ['observation-2'],
+        ],
+      );
     });
 
     testWidgets(
@@ -373,10 +928,11 @@ void main() {
         final harness = await _Harness.create();
         await tester.pumpWidget(harness.widget);
         await tester.pumpAndSettle();
-        await tester.tap(
-          find.byKey(const Key('uncertainty-proposed-observation-1')),
+        await _openFindingAction(
+          tester,
+          'proposed-observation-1',
+          'Need more evidence',
         );
-        await tester.pumpAndSettle();
         await tester.enterText(
           find.byKey(const Key('additional-views')),
           'Capture the lower door edge.',
@@ -388,8 +944,9 @@ void main() {
         await tester.tap(find.byKey(const Key('submit-action')));
         await tester.pumpAndSettle();
 
-        await tester.tap(
-          find.byKey(const Key('confirm-proposed-observation-1')),
+        await _tapVisible(
+          tester,
+          find.byKey(const Key('confirm-and-next-proposed-observation-1')),
         );
         await tester.pumpAndSettle();
         await _selectComponent(tester, 'Vehicle Component', 'left-front door');
@@ -401,7 +958,7 @@ void main() {
           find.text('Additional-view override reason is required.'),
           findsOneWidget,
         );
-        expect(find.text('Confirm Finding'), findsOneWidget);
+        expect(find.text('Review finding'), findsOneWidget);
         expect(find.text('Confirmed.'), findsOneWidget);
         await tester.enterText(
           find.byKey(const Key('override-reason')),
@@ -409,7 +966,15 @@ void main() {
         );
         await tester.tap(find.byKey(const Key('submit-action')));
         await tester.pumpAndSettle();
-        expect(find.text('Confirmed'), findsOneWidget);
+        final persisted = (await harness.repository.findById('assessment-1'))!;
+        final confirmed = persisted.findings.singleWhere(
+          (finding) => finding.id == 'proposed-observation-1',
+        );
+        expect(confirmed.reviewState, FindingReviewState.confirmed);
+        expect(
+          confirmed.additionalViewOverrideReason,
+          'Another retained Capture shows the edge.',
+        );
       },
     );
 
@@ -419,9 +984,10 @@ void main() {
       final harness = await _Harness.create();
       await tester.pumpWidget(harness.widget);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('add-manual-finding')));
+      await _openAssessmentAction(tester, 'Add finding');
+      await _chooseTopMapComponent(tester, 'Hood');
+      await tester.tap(find.text('Use Hood'));
       await tester.pumpAndSettle();
-      await _selectComponent(tester, 'Vehicle Component', 'hood');
       await tester.enterText(find.byKey(const Key('damage-type')), 'scratch');
       await _selectCapture(tester, 'capture-1');
       await tester.enterText(
@@ -441,10 +1007,40 @@ void main() {
       await tester.tap(find.byKey(const Key('submit-action')));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
-      await tester.scrollUntilVisible(find.text('Hood • scratch'), 300);
-      expect(find.text('Hood • scratch'), findsOneWidget);
+      final persisted = (await harness.repository.findById('assessment-1'))!;
+      final manual = persisted.findings.singleWhere(
+        (finding) => finding.manualEvidenceNote != null,
+      );
+      expect(manual.vehicleComponentId, VehicleComponentId.hood);
+      expect(manual.damageType, 'scratch');
+      expect(manual.manualEvidenceNote, 'Scratch visible near the edge.');
     });
   });
+}
+
+Future<void> _openAssessmentAction(WidgetTester tester, String action) async {
+  await tester.tap(find.byKey(const Key('assessment-actions-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(action));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openFindingAction(
+  WidgetTester tester,
+  String findingId,
+  String action,
+) async {
+  await tester.tap(find.byKey(Key('finding-more-actions-$findingId')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(action));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _selectComponent(
@@ -453,7 +1049,15 @@ Future<void> _selectComponent(
   String component,
 ) async {
   final selector = find.byKey(Key('component-selector-$label'));
-  await tester.ensureVisible(selector);
+  final dialogScrollable = find.descendant(
+    of: find.byType(AlertDialog),
+    matching: find.byType(Scrollable),
+  );
+  await tester.scrollUntilVisible(
+    selector,
+    300,
+    scrollable: dialogScrollable.last,
+  );
   await tester.tap(selector);
   await tester.pumpAndSettle();
   final id = VehicleComponentCatalog.all
@@ -462,13 +1066,35 @@ Future<void> _selectComponent(
       )
       .id;
   final componentRecord = VehicleComponentCatalog.byId(id);
-  await tester.tap(
-    find.byKey(Key('picker-view-${componentRecord.primaryView.name}')),
-  );
-  await tester.pump();
-  await tester.tap(find.byKey(Key('picker-active-component-${id.wireValue}')));
+  await tester.tap(find.text('Browse components'));
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const Key('use-component-selection')));
+  final search = find.byKey(const Key('top-map-component-search'));
+  await tester.enterText(search, componentRecord.label);
+  await tester.pump();
+  final componentChoice = find.byKey(Key('top-map-component-${id.wireValue}'));
+  await tester.tap(componentChoice);
+  await tester.pumpAndSettle();
+  final useAnyway = find.text('Use component anyway');
+  if (useAnyway.evaluate().isNotEmpty) {
+    await _tapVisible(tester, useAnyway);
+  } else {
+    await _tapVisible(tester, find.text('Use ${componentRecord.label}'));
+  }
+}
+
+Future<void> _chooseTopMapComponent(
+  WidgetTester tester,
+  String componentLabel,
+) async {
+  await tester.tap(find.text('Browse components'));
+  await tester.pumpAndSettle();
+  final search = find.byKey(const Key('top-map-component-search'));
+  await tester.enterText(search, componentLabel);
+  await tester.pump();
+  final id = VehicleComponentCatalog.all
+      .singleWhere((component) => component.label == componentLabel)
+      .id;
+  await tester.tap(find.byKey(Key('top-map-component-${id.wireValue}')));
   await tester.pumpAndSettle();
 }
 
@@ -513,8 +1139,16 @@ class _Harness {
   Widget get widget =>
       MaterialApp(home: AssessmentFindingReviewScreen(controller: controller));
 
+  Widget widgetWithContinue(VoidCallback onContinue) => MaterialApp(
+    home: AssessmentFindingReviewScreen(
+      controller: controller,
+      onContinue: onContinue,
+    ),
+  );
+
   static Future<_Harness> create({
     String firstObservationClass = 'dent',
+    bool combinedFinding = false,
   }) async {
     final repository = FailNextAssessmentSaveRepository(
       InMemoryAssessmentRepository(),
@@ -557,6 +1191,16 @@ class _Harness {
           ),
           modelIdentifier: 'test-model',
           runtimeIdentifier: 'test-runtime',
+        ),
+      );
+    }
+    if (combinedFinding) {
+      assessment = assessment.addFinding(
+        DamageFinding.proposed(
+          id: 'combined-finding',
+          observationIds: const ['observation-1', 'observation-2'],
+          supportingCaptureIds: const ['capture-1', 'capture-2'],
+          suggestedDamageType: 'surface damage',
         ),
       );
     }

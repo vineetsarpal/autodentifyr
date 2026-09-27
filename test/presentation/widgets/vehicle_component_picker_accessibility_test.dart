@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/screens/vehicle_component_picker_screen.dart';
 import 'package:autodentifyr/services/vehicle_component_detector_adapter.dart';
@@ -15,6 +16,7 @@ void main() {
       tester,
     ) async {
       await _pumpPicker(tester);
+      await _openCatalog(tester);
 
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
@@ -25,15 +27,26 @@ void main() {
       tester,
     ) async {
       await _pumpPicker(tester);
+      await tester.tap(find.byKey(const Key('picker-view-front')));
+      await tester.pumpAndSettle();
+      await _openCatalog(tester);
 
       final frontBumper = find
-          .byKey(const Key('picker-component-front_bumper'))
+          .byKey(const Key('picker-active-component-front_bumper'))
           .first;
+      await tester.scrollUntilVisible(
+        frontBumper,
+        180,
+        scrollable: find.descendant(
+          of: find.byKey(const Key('component-browse-list')),
+          matching: find.byType(Scrollable),
+        ),
+      );
       expect(find.bySemanticsLabel('Front bumper'), findsWidgets);
       expect(find.semantics.byAction(SemanticsAction.tap), findsWidgets);
 
       await tester.tap(frontBumper);
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.text('Part: Front bumper'), findsOneWidget);
       final selectedNodes = find.semantics.byFlag(SemanticsFlag.isSelected);
       expect(
@@ -53,8 +66,9 @@ void main() {
       );
 
       await tester.tap(find.byKey(const Key('picker-view-left')));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('Left vehicle diagram'), findsOneWidget);
+      await _openCatalog(tester);
       expect(find.text('Left mirror'), findsWidgets);
     });
 
@@ -78,11 +92,20 @@ void main() {
       );
       expect(find.text('Part: Hood'), findsOneWidget);
 
+      await _openCatalog(tester);
       await tester.enterText(
         find.byKey(const Key('component-search')),
         'tailgate',
       );
       await tester.pump();
+      await tester.scrollUntilVisible(
+        find.text('Tailgate'),
+        180,
+        scrollable: find.descendant(
+          of: find.byKey(const Key('component-browse-list')),
+          matching: find.byType(Scrollable),
+        ),
+      );
       expect(find.text('Tailgate'), findsWidgets);
     });
 
@@ -99,13 +122,23 @@ void main() {
         MediaQuery(
           data: const MediaQueryData(textScaler: TextScaler.linear(2)),
           child: MaterialApp(
-            home: VehicleComponentPickerScreen(geometry: geometry),
+            home: VehicleComponentPickerScreen(
+              geometry: geometry,
+              evidence: _pickerEvidence(),
+            ),
           ),
         ),
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      expect(
+        find.bySemanticsLabel('Supporting model evidence'),
+        findsOneWidget,
+      );
+      expect(find.text('dent'), findsOneWidget);
+      expect(find.text('80.0% confidence'), findsOneWidget);
 
+      await _openCatalog(tester);
       final search = find.byKey(const Key('component-search'));
       await tester.ensureVisible(search);
       await tester.tap(search);
@@ -171,6 +204,32 @@ void main() {
   });
 }
 
+VehicleComponentPickerEvidence _pickerEvidence() {
+  final acceptedAt = DateTime(2026, 1, 1);
+  return VehicleComponentPickerEvidence(
+    captures: [
+      Capture(
+        id: 'capture-1',
+        source: CaptureSource.camera,
+        localPath: '/missing/capture-1.jpg',
+        acceptedByProfileId: 'appraiser-1',
+        acceptedAt: acceptedAt,
+      ),
+    ],
+    observations: [
+      const DamageObservation(
+        id: 'observation-1',
+        captureId: 'capture-1',
+        rawClass: 'dent',
+        confidence: .8,
+        bounds: ObservationBounds(left: .1, top: .2, width: .3, height: .4),
+        modelIdentifier: 'test-model',
+      ),
+    ],
+    initiatingObservationId: 'observation-1',
+  );
+}
+
 Future<void> _selectHoodFromDiagram(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('picker-view-front')));
   await tester.pump();
@@ -213,6 +272,12 @@ Future<VehicleComponentGeometry> _loadGeometry() async =>
         'assets/vehicle_components/vehicle_component_geometry.v1.json',
       ).readAsString(),
     );
+
+Future<void> _openCatalog(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(const Key('browse-components')));
+  await tester.tap(find.byKey(const Key('browse-components')));
+  await tester.pumpAndSettle();
+}
 
 class _PickerHarness extends StatefulWidget {
   const _PickerHarness({required this.geometry});

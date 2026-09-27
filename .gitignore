@@ -70,7 +70,6 @@ lib/firebase_options.dart
 **/android/key.properties
 *.jks
 *.keystore
-*.jks
 key.properties
 
 # iOS/XCode related
@@ -121,6 +120,9 @@ key.properties
 
 # Coverage
 coverage/
+
+# Generated golden-test comparison output
+/test/**/failures/
 
 # Symbols
 app.*.symbols

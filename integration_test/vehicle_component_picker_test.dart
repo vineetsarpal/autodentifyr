@@ -1,5 +1,6 @@
 import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/screens/vehicle_component_picker_screen.dart';
+import 'package:autodentifyr/services/vehicle_component_geometry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -10,16 +11,20 @@ void main() {
   testWidgets('diagram selection returns a canonical component to its parent', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: _PickerHarness()));
+    final geometry = await VehicleComponentGeometry.loadAsset();
+    await tester.pumpWidget(
+      MaterialApp(home: _PickerHarness(geometry: geometry)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('open-picker')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('picker-view-front')));
     await tester.pump();
-    await tester.tap(
-      find.byKey(const Key('diagram-component-front_bumper')).first,
-    );
+    final frontBumper = find
+        .byKey(const Key('diagram-component-front_bumper'))
+        .first;
+    await tester.tapAt(tester.getCenter(frontBumper));
     await tester.pump();
     expect(find.text('Use Front bumper'), findsOneWidget);
 
@@ -31,10 +36,18 @@ void main() {
   testWidgets('list search, Undo, and Use are deterministic and local', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: _PickerHarness()));
+    final geometry = await VehicleComponentGeometry.loadAsset();
+    await tester.pumpWidget(
+      MaterialApp(home: _PickerHarness(geometry: geometry)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('open-picker')));
+    await tester.pumpAndSettle();
+    final browseButton = find.byKey(const Key('browse-components'));
+    await tester.ensureVisible(browseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(browseButton);
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('component-search')),
@@ -58,6 +71,10 @@ void main() {
       isNull,
     );
 
+    await tester.ensureVisible(browseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(browseButton);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('picker-component-tailgate')).first);
     await tester.pump();
     await tester.tap(find.byKey(const Key('use-component-selection')));
@@ -67,7 +84,9 @@ void main() {
 }
 
 class _PickerHarness extends StatefulWidget {
-  const _PickerHarness();
+  const _PickerHarness({required this.geometry});
+
+  final VehicleComponentGeometry geometry;
 
   @override
   State<_PickerHarness> createState() => _PickerHarnessState();
@@ -91,8 +110,10 @@ class _PickerHarnessState extends State<_PickerHarness> {
             final selected = await Navigator.of(context)
                 .push<VehicleComponentId>(
                   MaterialPageRoute(
-                    builder: (_) =>
-                        VehicleComponentPickerScreen(existingId: _selected),
+                    builder: (_) => VehicleComponentPickerScreen(
+                      existingId: _selected,
+                      geometry: widget.geometry,
+                    ),
                   ),
                 );
             if (selected != null && mounted) {

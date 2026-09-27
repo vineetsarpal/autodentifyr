@@ -5,7 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/models/vehicle_component.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_finding_review_controller.dart';
+import 'package:autodentifyr/presentation/controllers/assessment_progress.dart';
+import 'package:autodentifyr/presentation/models/vehicle_component_existing_finding.dart';
+import 'package:autodentifyr/presentation/models/vehicle_finding_map_item.dart';
+import 'package:autodentifyr/presentation/screens/vehicle_component_map_screen.dart';
+import 'package:autodentifyr/presentation/screens/vehicle_component_picker_screen.dart';
 import 'package:autodentifyr/presentation/widgets/assessment_evidence_selector.dart';
+import 'package:autodentifyr/presentation/widgets/observation_evidence.dart';
 import 'package:autodentifyr/presentation/widgets/vehicle_component_selector.dart';
 import 'package:autodentifyr/services/vehicle_component_detector_adapter.dart';
 
@@ -27,6 +33,7 @@ class AssessmentFindingReviewScreen extends StatefulWidget {
 class _AssessmentFindingReviewScreenState
     extends State<AssessmentFindingReviewScreen> {
   final Set<String> _selectedFindingIds = {};
+  bool _isMergeMode = false;
 
   @override
   void initState() {
@@ -38,7 +45,56 @@ class _AssessmentFindingReviewScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Review findings')),
+    appBar: AppBar(
+      leading: _isMergeMode
+          ? IconButton(
+              key: const Key('cancel-merge-mode'),
+              tooltip: 'Cancel merge selection',
+              onPressed: _leaveMergeMode,
+              icon: const Icon(Icons.close),
+            )
+          : null,
+      title: Text(_isMergeMode ? 'Select findings' : 'Review findings'),
+      actions: _isMergeMode
+          ? [
+              TextButton(
+                key: const Key('merge-selected'),
+                onPressed: _selectedFindingIds.length >= 2
+                    ? _mergeSelected
+                    : null,
+                child: const Text('Merge'),
+              ),
+            ]
+          : [
+              PopupMenuButton<String>(
+                key: const Key('assessment-actions-menu'),
+                tooltip: 'Assessment actions',
+                onSelected: _handleAssessmentAction,
+                itemBuilder: (context) {
+                  final assessment = widget.controller.state.assessment;
+                  final canMerge =
+                      assessment != null &&
+                      _mergeCandidates(assessment).length >= 2;
+                  return [
+                    const PopupMenuItem(
+                      key: Key('add-manual-finding'),
+                      value: 'add',
+                      child: Text('Add finding'),
+                    ),
+                    if (canMerge)
+                      const PopupMenuItem(
+                        value: 'merge',
+                        child: Text('Merge findings'),
+                      ),
+                    const PopupMenuItem(
+                      value: 'map',
+                      child: Text('View vehicle map'),
+                    ),
+                  ];
+                },
+              ),
+            ],
+    ),
     bottomNavigationBar: widget.onContinue == null
         ? null
         : SafeArea(
@@ -48,14 +104,26 @@ class _AssessmentFindingReviewScreenState
                 listenable: widget.controller,
                 builder: (context, _) {
                   final state = widget.controller.state;
+                  final assessment = state.assessment;
+                  final remaining = assessment == null
+                      ? null
+                      : AssessmentProgress.fromAssessment(
+                          assessment,
+                        ).outstandingFor(AssessmentStage.findings);
                   return FilledButton(
                     key: const Key('continue-assessment'),
-                    onPressed: state.phase == FindingReviewPhase.ready
+                    onPressed:
+                        state.phase == FindingReviewPhase.ready &&
+                            remaining == 0
                         ? widget.onContinue
                         : null,
                     child: state.phase == FindingReviewPhase.saving
                         ? const Text('Saving to device...')
-                        : const Text('Continue to severity'),
+                        : Text(
+                            remaining == 0
+                                ? 'Continue to severity'
+                                : 'Review ${remaining ?? 0} remaining',
+                          ),
                   );
                 },
               ),
@@ -80,9 +148,10 @@ class _AssessmentFindingReviewScreenState
         child: Text(state.message ?? 'Intake Assessment unavailable.'),
       );
     }
-    final proposedCount = assessment.findings
-        .where((finding) => finding.reviewState == FindingReviewState.proposed)
-        .length;
+    final pendingFindings = _pendingFindings(assessment);
+    final reviewedFindings = _reviewedFindings(assessment);
+    final focusedFinding = pendingFindings.firstOrNull;
+    if (_isMergeMode) return _buildMergeMode(assessment);
     return Column(
       children: [
         if (state.message != null)
@@ -98,150 +167,211 @@ class _AssessmentFindingReviewScreenState
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '$proposedCount Proposed',
+              focusedFinding == null
+                  ? 'All findings reviewed'
+                  : 'Finding 1 of ${pendingFindings.length}',
+              key: const Key('finding-review-progress'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              FilledButton.icon(
-                key: const Key('add-manual-finding'),
-                onPressed: _addManual,
-                icon: const Icon(Icons.add),
-                label: const Text('Add manual Finding'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                key: const Key('merge-selected'),
-                onPressed: _selectedFindingIds.length >= 2
-                    ? _mergeSelected
-                    : null,
-                child: const Text('Merge selected'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
         Expanded(
-          child: ListView.separated(
+          child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            itemCount: assessment.findings.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) =>
-                _buildFinding(assessment, assessment.findings[index]),
+            children: [
+              if (focusedFinding != null)
+                _buildFocusedFinding(assessment, focusedFinding),
+              if (reviewedFindings.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildReviewedFindings(reviewedFindings),
+              ],
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildFinding(IntakeAssessment assessment, DamageFinding finding) {
+  Widget _buildMergeMode(IntakeAssessment assessment) {
+    final candidates = _mergeCandidates(assessment);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          'Select at least two findings to combine.',
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 12),
+        for (final finding in candidates)
+          Card(
+            child: CheckboxListTile(
+              key: Key('select-${finding.id}'),
+              value: _selectedFindingIds.contains(finding.id),
+              title: Text(
+                '${_componentLabel(finding.vehicleComponentId)} • '
+                '${finding.damageType ?? 'Damage type not recorded'}',
+              ),
+              subtitle: Text(_reviewLabel(finding)),
+              onChanged: (selected) => setState(() {
+                if (selected ?? false) {
+                  _selectedFindingIds.add(finding.id);
+                } else {
+                  _selectedFindingIds.remove(finding.id);
+                }
+              }),
+            ),
+          ),
+      ],
+    );
+  }
+
+  List<DamageFinding> _mergeCandidates(IntakeAssessment assessment) =>
+      assessment.findings
+          .where(
+            (finding) => finding.reviewState != FindingReviewState.dismissed,
+          )
+          .toList(growable: false);
+
+  void _leaveMergeMode() {
+    setState(() {
+      _isMergeMode = false;
+      _selectedFindingIds.clear();
+    });
+  }
+
+  List<DamageFinding> _pendingFindings(IntakeAssessment assessment) =>
+      assessment.findings
+          .where(
+            (finding) =>
+                finding.reviewState == FindingReviewState.proposed &&
+                finding.reviewOutcome == null,
+          )
+          .toList(growable: false);
+
+  List<DamageFinding> _reviewedFindings(IntakeAssessment assessment) =>
+      assessment.findings
+          .where(
+            (finding) =>
+                finding.reviewState != FindingReviewState.proposed ||
+                finding.reviewOutcome != null,
+          )
+          .toList(growable: false);
+
+  Widget _buildReviewedFindings(List<DamageFinding> findings) => Card(
+    child: ExpansionTile(
+      key: const Key('reviewed-findings'),
+      title: Text('Reviewed (${findings.length})'),
+      children: [
+        for (final finding in findings)
+          ListTile(
+            key: Key('reviewed-finding-${finding.id}'),
+            title: Text(
+              '${_componentLabel(finding.vehicleComponentId)} • '
+              '${finding.damageType ?? 'Damage type not recorded'}',
+            ),
+            subtitle: Text(_reviewLabel(finding)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => finding.reviewState == FindingReviewState.confirmed
+                ? _edit(finding)
+                : _confirm(finding),
+          ),
+      ],
+    ),
+  );
+
+  Widget _buildFocusedFinding(
+    IntakeAssessment assessment,
+    DamageFinding finding,
+  ) {
     final observations = assessment.observations
         .where((observation) => finding.observationIds.contains(observation.id))
         .toList(growable: false);
-    final isSelected = _selectedFindingIds.contains(finding.id);
-    final colorScheme = Theme.of(context).colorScheme;
+    final quickComponent = _quickConfirmComponent(assessment, finding);
+    final canQuickConfirm =
+        quickComponent != null &&
+        (finding.damageType?.trim().isNotEmpty ?? false) &&
+        finding.additionalViewRequests.isEmpty;
     return Card(
-      key: Key('finding-card-${finding.id}'),
-      color: isSelected ? colorScheme.primary.withValues(alpha: 0.18) : null,
-      elevation: isSelected ? 4 : null,
-      shape: isSelected
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: colorScheme.primary, width: 2),
-            )
-          : null,
+      key: Key('focused-finding-${finding.id}'),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
-              key: Key('selection-row-${finding.id}'),
               children: [
-                Checkbox(
-                  key: Key('select-${finding.id}'),
-                  value: isSelected,
-                  onChanged: (selected) => setState(() {
-                    if (selected ?? false) {
-                      _selectedFindingIds.add(finding.id);
-                    } else {
-                      _selectedFindingIds.remove(finding.id);
-                    }
-                  }),
-                ),
                 Expanded(
                   child: Text(
-                    _reviewLabel(finding),
-                    key: Key('status-${finding.id}'),
+                    'Suggested finding',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                if (observations.length > 1)
-                  Text('${observations.length} views'),
+                PopupMenuButton<String>(
+                  key: Key('finding-more-actions-${finding.id}'),
+                  tooltip: 'More finding actions',
+                  onSelected: (action) => _handleFindingAction(action, finding),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'uncertainty',
+                      child: Text('Need more evidence'),
+                    ),
+                    PopupMenuItem(
+                      value: 'undetermined',
+                      child: Text('Cannot determine'),
+                    ),
+                    PopupMenuItem(value: 'split', child: Text('Split finding')),
+                  ],
+                ),
               ],
             ),
-            if (finding.reviewState == FindingReviewState.proposed) ...[
-              if (observations.isEmpty)
-                const Text('No model observation is available.'),
-              for (final observation in observations)
-                ..._buildObservationEvidence(assessment, observation),
-              if (_hasAppraiserEdit(assessment, finding))
-                Text(
-                  '${_componentLabel(finding.vehicleComponentId)} • ${finding.damageType}',
-                )
-              else ...[
-                const Text('Component and damage type need Appraiser review.'),
-              ],
-            ] else ...[
-              Text(
-                finding.vehicleComponentId == null || finding.damageType == null
-                    ? 'Component and Damage Type not yet confirmed'
-                    : '${_componentLabel(finding.vehicleComponentId)} • ${finding.damageType}',
-              ),
-            ],
-            if (finding.hasConflictingViews) ...[
-              const SizedBox(height: 4),
-              const Text('Conflicting views'),
-            ],
-            for (final request in finding.additionalViewRequests) Text(request),
+            const SizedBox(height: 8),
+            for (final observation in observations)
+              ..._buildObservationEvidence(assessment, observation),
+            Text('Suggested', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton(
-                  key: Key('confirm-${finding.id}'),
+                ActionChip(
+                  key: const Key('focused-component'),
+                  avatar: const Icon(Icons.directions_car_outlined),
+                  label: Text(
+                    quickComponent == null
+                        ? 'Choose component'
+                        : _componentLabel(quickComponent),
+                  ),
                   onPressed: () => _confirm(finding),
-                  child: const Text('Confirm'),
                 ),
-                OutlinedButton(
-                  key: Key('edit-${finding.id}'),
-                  onPressed: () => _edit(finding),
-                  child: const Text('Edit'),
+                ActionChip(
+                  key: const Key('focused-damage-type'),
+                  avatar: const Icon(Icons.build_outlined),
+                  label: Text(finding.damageType ?? 'Add damage type'),
+                  onPressed: () => _confirm(finding),
                 ),
-                OutlinedButton(
-                  key: Key('dismiss-${finding.id}'),
-                  onPressed: () => _dismiss(finding),
-                  child: const Text('Dismiss'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    key: Key('not-damage-${finding.id}'),
+                    onPressed: () => _notDamage(finding),
+                    child: const Text('Not damage'),
+                  ),
                 ),
-                TextButton(
-                  key: Key('uncertainty-${finding.id}'),
-                  onPressed: () => _recordUncertainty(finding),
-                  child: const Text('Uncertainty'),
-                ),
-                TextButton(
-                  key: Key('undetermined-${finding.id}'),
-                  onPressed: () => _markUndetermined(finding),
-                  child: const Text('Undetermined'),
-                ),
-                TextButton(
-                  key: Key('split-${finding.id}'),
-                  onPressed: () => _split(finding),
-                  child: const Text('Split'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    key: Key('confirm-and-next-${finding.id}'),
+                    onPressed: () => canQuickConfirm
+                        ? _quickConfirm(finding, quickComponent)
+                        : _confirm(finding),
+                    child: Text(
+                      canQuickConfirm ? 'Confirm & next' : 'Review details',
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -251,12 +381,228 @@ class _AssessmentFindingReviewScreenState
     );
   }
 
+  void _handleAssessmentAction(String action) {
+    switch (action) {
+      case 'add':
+        _startManualFinding();
+      case 'merge':
+        setState(() => _isMergeMode = true);
+      case 'map':
+        _openVehicleMap();
+    }
+  }
+
+  void _handleFindingAction(String action, DamageFinding finding) {
+    switch (action) {
+      case 'uncertainty':
+        _recordUncertainty(finding);
+      case 'undetermined':
+        _markUndetermined(finding);
+      case 'split':
+        _split(finding);
+    }
+  }
+
+  VehicleComponentId? _quickConfirmComponent(
+    IntakeAssessment assessment,
+    DamageFinding finding,
+  ) {
+    if (finding.vehicleComponentId case final component?) return component;
+    final observationIds = finding.observationIds.toSet();
+    final detectorResult = VehicleComponentDetectorAdapter.resolveAll(
+      assessment.observations
+          .where((observation) => observationIds.contains(observation.id))
+          .map((observation) => observation.rawClass),
+    );
+    return switch (detectorResult) {
+      ExactVehicleComponentDetectorResult(:final componentId) => componentId,
+      _ => null,
+    };
+  }
+
+  Future<void> _quickConfirm(
+    DamageFinding finding,
+    VehicleComponentId component,
+  ) => widget.controller.submit(
+    ConfirmFindingAction(
+      findingId: finding.id,
+      vehicleComponentId: component,
+      damageType: finding.damageType!,
+      reason: 'Appraiser confirmed the displayed component and damage type.',
+    ),
+  );
+
+  Future<void> _notDamage(DamageFinding finding) async {
+    if (finding.additionalViewRequests.isNotEmpty) {
+      await _dismiss(finding);
+      return;
+    }
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              child: Text(
+                'Why is this not damage?',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+            ),
+            for (final option in const [
+              ('reflection', 'Reflection'),
+              ('duplicate', 'Duplicate'),
+              ('existing-mark', 'Existing mark'),
+            ])
+              ListTile(
+                key: Key('dismiss-reason-${option.$1}'),
+                title: Text(option.$2),
+                onTap: () => Navigator.pop(sheetContext, option.$2),
+              ),
+            ListTile(
+              key: const Key('dismiss-reason-other'),
+              title: const Text('Other'),
+              onTap: () => Navigator.pop(sheetContext, ''),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || reason == null) return;
+    if (reason.isEmpty) {
+      await _dismiss(finding);
+      return;
+    }
+    await widget.controller.submit(
+      DismissFindingAction(findingId: finding.id, reason: reason),
+    );
+  }
+
+  List<VehicleFindingMapItem> _mapItems(IntakeAssessment assessment) =>
+      assessment.findings
+          .where(
+            (finding) =>
+                finding.reviewState != FindingReviewState.dismissed &&
+                finding.vehicleComponentId != null,
+          )
+          .map((finding) {
+            final observations = assessment.observations
+                .where(
+                  (observation) =>
+                      finding.observationIds.contains(observation.id),
+                )
+                .toList(growable: false);
+            final confidence = observations.isEmpty
+                ? null
+                : observations
+                      .map((observation) => observation.confidence)
+                      .reduce((a, b) => a > b ? a : b);
+            final captureIds = {
+              ...finding.supportingCaptureIds,
+              ...observations.map((observation) => observation.captureId),
+            };
+            final state = finding.manualEvidenceNote != null
+                ? VehicleFindingMapState.manual
+                : finding.reviewOutcome == FindingReviewOutcome.undetermined
+                ? VehicleFindingMapState.undetermined
+                : finding.reviewState == FindingReviewState.confirmed
+                ? VehicleFindingMapState.confirmed
+                : finding.hasConflictingViews ||
+                      finding.additionalViewRequests.isNotEmpty
+                ? VehicleFindingMapState.uncertain
+                : VehicleFindingMapState.proposed;
+            return VehicleFindingMapItem(
+              findingId: finding.id,
+              componentId: finding.vehicleComponentId!,
+              damageType: finding.damageType ?? 'Damage',
+              state: state,
+              confidence: confidence,
+              evidenceCount: captureIds.length,
+            );
+          })
+          .toList(growable: false);
+
+  Future<VehicleComponentId?> _chooseComponent({
+    VehicleComponentId? initialComponent,
+  }) async {
+    final assessment = widget.controller.state.assessment;
+    if (assessment == null) return null;
+    final dismissedCounts = <VehicleComponentId, int>{};
+    for (final finding in assessment.findings.where(
+      (finding) =>
+          finding.reviewState == FindingReviewState.dismissed &&
+          finding.vehicleComponentId != null,
+    )) {
+      dismissedCounts.update(
+        finding.vehicleComponentId!,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    return Navigator.of(context).push<VehicleComponentId>(
+      MaterialPageRoute<VehicleComponentId>(
+        fullscreenDialog: true,
+        builder: (_) => VehicleComponentMapScreen(
+          initialComponent: initialComponent,
+          items: _mapItems(assessment),
+          dismissedFindingCounts: dismissedCounts,
+          onViewEvidence: _viewMapEvidence,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openVehicleMap() async {
+    await _chooseComponent();
+  }
+
+  Future<void> _startManualFinding() async {
+    final selected = await _chooseComponent();
+    if (!mounted || selected == null) return;
+    await _addManual(initialComponent: selected);
+  }
+
+  Future<void> _viewMapEvidence(String findingId) async {
+    final assessment = widget.controller.state.assessment;
+    final finding = assessment?.findings
+        .where((item) => item.id == findingId)
+        .firstOrNull;
+    if (assessment == null || finding == null) return;
+    for (final observationId in finding.observationIds) {
+      final observation = assessment.observations
+          .where((item) => item.id == observationId)
+          .firstOrNull;
+      if (observation == null) continue;
+      final capture = _captureById(assessment, observation.captureId);
+      if (capture != null) {
+        await _showObservationEvidence(capture, observation);
+        return;
+      }
+    }
+    for (final captureId in finding.supportingCaptureIds) {
+      final capture = _captureById(assessment, captureId);
+      if (capture != null) {
+        await _showCaptureEvidence(capture);
+        return;
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('No evidence is available for this finding.'),
+        ),
+      );
+  }
+
   List<Widget> _buildObservationEvidence(
     IntakeAssessment assessment,
-    DamageObservation observation, {
-    String? statusLabel,
-    Key? statusKey,
-  }) {
+    DamageObservation observation,
+  ) {
     final capture = _captureById(assessment, observation.captureId);
     final captureSource = switch (capture?.source) {
       CaptureSource.camera => 'Camera still',
@@ -281,7 +627,7 @@ class _AssessmentFindingReviewScreenState
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox.square(
                       dimension: 72,
-                      child: _ObservationImageOverlay(
+                      child: ObservationImageOverlay(
                         capture: capture,
                         observation: observation,
                         imageKey: Key(
@@ -303,16 +649,12 @@ class _AssessmentFindingReviewScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (statusLabel != null) ...[
-                  Text(statusLabel, key: statusKey),
-                  const SizedBox(height: 4),
-                ],
                 Text(
                   'Suggested ${observation.rawClass} • '
                   '${(observation.confidence * 100).toStringAsFixed(1)}% confidence',
                 ),
                 const SizedBox(height: 4),
-                Text('$captureSource • photo ${observation.captureId}'),
+                Text(captureSource),
               ],
             ),
           ),
@@ -328,10 +670,8 @@ class _AssessmentFindingReviewScreenState
   ) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       fullscreenDialog: true,
-      builder: (_) => _ObservationEvidenceViewer(
-        capture: capture,
-        observation: observation,
-      ),
+      builder: (_) =>
+          ObservationEvidenceViewer(capture: capture, observation: observation),
     ),
   );
 
@@ -342,14 +682,52 @@ class _AssessmentFindingReviewScreenState
     return null;
   }
 
-  bool _hasAppraiserEdit(IntakeAssessment assessment, DamageFinding finding) =>
-      assessment.corrections.any(
-        (correction) =>
-            correction.kind == AssessmentCorrectionKind.edit &&
-            correction.replacements.any(
-              (replacement) => replacement.id == finding.id,
-            ),
-      );
+  VehicleComponentPickerEvidence? _pickerEvidenceFor(
+    IntakeAssessment assessment,
+    DamageFinding? finding,
+  ) {
+    if (finding == null || finding.observationIds.isEmpty) return null;
+    final observationIds = finding.observationIds.toSet();
+    final observations = assessment.observations
+        .where((observation) => observationIds.contains(observation.id))
+        .toList(growable: false);
+    if (observations.isEmpty) return null;
+    final captureIds = observations
+        .map((observation) => observation.captureId)
+        .toSet();
+    final captures = assessment.captures
+        .where((capture) => captureIds.contains(capture.id))
+        .toList(growable: false);
+    if (captures.isEmpty) return null;
+    return VehicleComponentPickerEvidence(
+      captures: captures,
+      observations: observations,
+      initiatingObservationId: observations.first.id,
+    );
+  }
+
+  List<VehicleComponentExistingFinding> _existingFindingsFor(
+    IntakeAssessment assessment,
+    DamageFinding? currentFinding,
+  ) => List.unmodifiable(
+    assessment.findings
+        .where(
+          (finding) =>
+              finding.id != currentFinding?.id &&
+              finding.vehicleComponentId != null &&
+              (finding.reviewState == FindingReviewState.proposed ||
+                  finding.reviewState == FindingReviewState.confirmed),
+        )
+        .map(
+          (finding) => VehicleComponentExistingFinding(
+            id: finding.id,
+            componentId: finding.vehicleComponentId!,
+            reviewState: finding.reviewState,
+            damageType: finding.damageType,
+          ),
+        )
+        .toList(growable: false),
+  );
 
   String _reviewLabel(DamageFinding finding) => switch (finding.reviewState) {
     FindingReviewState.proposed =>
@@ -362,7 +740,7 @@ class _AssessmentFindingReviewScreenState
 
   Future<void> _confirm(DamageFinding finding) async {
     await _showFields(
-      title: 'Confirm Finding',
+      title: 'Review finding',
       finding: finding,
       fields: [
         _Field(
@@ -458,16 +836,29 @@ class _AssessmentFindingReviewScreenState
     );
   }
 
-  Future<void> _addManual() async {
+  Future<void> _addManual({VehicleComponentId? initialComponent}) async {
     await _showFields(
       title: 'Add manual Finding',
-      fields: const [
-        _Field('vehicleComponent', 'Vehicle Component', 'vehicle-component'),
-        _Field('damageType', 'Damage Type', 'damage-type'),
-        _Field('captures', 'Supporting Capture IDs', 'capture-ids'),
-        _Field('observations', 'Matching Observation IDs', 'observation-ids'),
-        _Field('evidenceNote', 'Appraiser evidence note', 'evidence-note'),
-        _Field('reason', 'Reason', 'reason'),
+      fields: [
+        _Field(
+          'vehicleComponent',
+          'Vehicle Component',
+          'vehicle-component',
+          initialComponent?.wireValue ?? '',
+        ),
+        const _Field('damageType', 'Damage Type', 'damage-type'),
+        const _Field('captures', 'Supporting Capture IDs', 'capture-ids'),
+        const _Field(
+          'observations',
+          'Matching Observation IDs',
+          'observation-ids',
+        ),
+        const _Field(
+          'evidenceNote',
+          'Appraiser evidence note',
+          'evidence-note',
+        ),
+        const _Field('reason', 'Reason', 'reason'),
       ],
       requiredFields: {
         'vehicleComponent',
@@ -614,7 +1005,7 @@ class _AssessmentFindingReviewScreenState
         ),
       ],
       requiredFields: {'reason'},
-      overrideRequired: false,
+      overrideRequired: finding.additionalViewRequests.isNotEmpty,
       actionFromValues: (values) => MarkFindingUndeterminedAction(
         findingId: finding.id,
         reason: values['reason']!,
@@ -654,7 +1045,10 @@ class _AssessmentFindingReviewScreenState
       ),
     );
     if (mounted && widget.controller.state.phase == FindingReviewPhase.ready) {
-      setState(_selectedFindingIds.clear);
+      setState(() {
+        _selectedFindingIds.clear();
+        _isMergeMode = false;
+      });
     }
   }
 
@@ -735,7 +1129,6 @@ class _AssessmentFindingReviewScreenState
   }) async {
     final assessment = widget.controller.state.assessment!;
     final componentIsSuggestion =
-        title == 'Confirm Finding' &&
         finding?.reviewState == FindingReviewState.proposed;
     final hasExistingComponent = finding?.vehicleComponentId != null;
     final detectorResult =
@@ -748,6 +1141,8 @@ class _AssessmentFindingReviewScreenState
             ),
           )
         : null;
+    final pickerEvidence = _pickerEvidenceFor(assessment, finding);
+    final existingFindings = _existingFindingsFor(assessment, finding);
     final controllers = {
       for (final field in fields)
         field.name: TextEditingController(
@@ -806,6 +1201,8 @@ class _AssessmentFindingReviewScreenState
                                         field.name == 'vehicleComponent'
                                     ? detectorResult
                                     : null,
+                                evidence: pickerEvidence,
+                                existingFindings: existingFindings,
                                 onChanged: (value) =>
                                     controllers[field.name]!.text =
                                         value.wireValue,
@@ -955,7 +1352,7 @@ class _AssessmentFindingReviewScreenState
                     errorBuilder: (_, _, _) =>
                         const Icon(Icons.image_not_supported_outlined),
                   )
-                : _ObservationImageOverlay(
+                : ObservationImageOverlay(
                     capture: capture,
                     observation: observation,
                     imageKey: Key('dialog-evidence-image-${finding.id}'),
@@ -996,153 +1393,6 @@ class _AssessmentFindingReviewScreenState
 String _componentLabel(VehicleComponentId? id) => id == null
     ? 'Component not selected'
     : VehicleComponentCatalog.byId(id).label;
-
-class _ObservationEvidenceViewer extends StatelessWidget {
-  const _ObservationEvidenceViewer({
-    required this.capture,
-    required this.observation,
-  });
-
-  final Capture capture;
-  final DamageObservation observation;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: CloseButton(
-        key: const Key('close-model-evidence'),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: const Text('Model evidence'),
-    ),
-    body: SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${observation.rawClass} • '
-                  '${(observation.confidence * 100).toStringAsFixed(1)}% '
-                  'confidence',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                const Text('Pinch to zoom and drag to inspect the detection.'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: InteractiveViewer(
-              minScale: 1,
-              maxScale: 8,
-              boundaryMargin: const EdgeInsets.all(80),
-              child: _ObservationImageOverlay(
-                capture: capture,
-                observation: observation,
-                imageKey: Key('model-evidence-image-${observation.id}'),
-                boundsKey: Key('finding-observation-bounds-${observation.id}'),
-                outlineColor: Theme.of(context).colorScheme.tertiary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _ObservationImageOverlay extends StatelessWidget {
-  const _ObservationImageOverlay({
-    required this.capture,
-    required this.observation,
-    required this.imageKey,
-    required this.boundsKey,
-    required this.outlineColor,
-  });
-
-  final Capture capture;
-  final DamageObservation observation;
-  final Key imageKey;
-  final Key boundsKey;
-  final Color outlineColor;
-
-  @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: Colors.black,
-    child: FittedBox(
-      fit: BoxFit.contain,
-      child: Stack(
-        children: [
-          Image.file(
-            File(capture.localPath),
-            key: imageKey,
-            errorBuilder: (_, _, _) => const SizedBox(
-              width: 4,
-              height: 3,
-              child: ColoredBox(
-                color: Colors.black12,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Icon(Icons.image_not_supported_outlined),
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                key: boundsKey,
-                painter: _ObservationBoundsPainter(
-                  bounds: observation.bounds,
-                  color: outlineColor,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _ObservationBoundsPainter extends CustomPainter {
-  const _ObservationBoundsPainter({required this.bounds, required this.color});
-
-  final ObservationBounds bounds;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final left = bounds.left.clamp(0.0, 1.0).toDouble();
-    final top = bounds.top.clamp(0.0, 1.0).toDouble();
-    final right = (bounds.left + bounds.width).clamp(0.0, 1.0).toDouble();
-    final bottom = (bounds.top + bounds.height).clamp(0.0, 1.0).toDouble();
-    final rectangle = Rect.fromLTRB(
-      left * size.width,
-      top * size.height,
-      right * size.width,
-      bottom * size.height,
-    );
-    final shadow = Paint()
-      ..color = Colors.black87
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6;
-    final outline = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    canvas.drawRect(rectangle, shadow);
-    canvas.drawRect(rectangle, outline);
-  }
-
-  @override
-  bool shouldRepaint(_ObservationBoundsPainter oldDelegate) =>
-      oldDelegate.bounds != bounds || oldDelegate.color != color;
-}
 
 class _Field {
   const _Field(this.name, this.label, this.keyName, [this.initial = '']);
