@@ -88,6 +88,12 @@ afterward to reinstall the normal app. Android models remain bundled in native
 assets; the app copies them to private storage because LiteRT requires an absolute
 file path.
 
+### Google Play releases
+
+Follow the [Google Play release runbook](docs/release/google-play-release-runbook.md)
+for versioning, release validation, signed App Bundle creation, Internal testing,
+closed testing, and staged production rollout.
+
 ## 🗺️ Roadmap & Future Work
 
 We are actively working to improve the accuracy and utility of AutoDentifyr. Future updates will focus on:
