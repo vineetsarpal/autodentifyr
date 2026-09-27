@@ -29,6 +29,10 @@ Match the existing history: write concise, imperative commit subjects such as `A
 
 Never commit Firebase credentials or downloaded ML model binaries. Create `lib/firebase_options.dart` from `lib/firebase_options.example.dart`, place platform Firebase files in the locations documented in `README.md`, and keep local secrets out of logs and reviews.
 
+## Research Notes
+
+Store all agent-produced research reports and supporting research notes under `docs.local/`, not `docs/`. The `docs.local/` directory is intentionally git-ignored so exploratory findings, external-source notes, and locally generated research artifacts remain outside the committed documentation tree. Create the directory when needed and use descriptive Markdown filenames.
+
 ## Agent skills
 
 ### Issue tracker
