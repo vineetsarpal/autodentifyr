@@ -1,14 +1,40 @@
 package com.vineetsarpal.autodentifyr
 
+import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMethodCodec
 import java.io.File
-import java.io.FileNotFoundException
 
 class MainActivity : FlutterActivity() {
     private var modelAssetsChannel: MethodChannel? = null
+
+    private val bundledModelCache: BundledModelCache by lazy {
+        synchronized(MainActivity::class.java) {
+            sharedModelCache ?: run {
+                val context = applicationContext
+                // The legacy overload supports every Android version targeted by Flutter.
+                @Suppress("DEPRECATION")
+                val info = context.packageManager.getPackageInfo(context.packageName, 0)
+                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    info.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    info.versionCode.toLong()
+                }
+                BundledModelCache(
+                    File(context.filesDir, "bundled_models"),
+                    "${context.packageName}:${info.versionName}:$versionCode:${info.lastUpdateTime}",
+                    context.assets::open,
+                ).also { sharedModelCache = it }
+            }
+        }
+    }
+
+    companion object {
+        private var sharedModelCache: BundledModelCache? = null
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -30,34 +56,10 @@ class MainActivity : FlutterActivity() {
                     return@setMethodCallHandler
                 }
                 try {
-                    result.success(materializeModel(name))
+                    result.success(bundledModelCache.materialize(name))
                 } catch (e: Exception) {
                     result.error("model_asset_error", e.message, null)
                 }
-            }
-        }
-    }
-
-    // LiteRT's file loader requires an absolute file, not an Android asset name.
-    // Copy off the UI thread, then atomically replace to avoid partial/stale models.
-    private fun materializeModel(name: String): String? {
-        val source = try {
-            assets.open(name)
-        } catch (_: FileNotFoundException) {
-            return null
-        }
-        source.use { input ->
-            val directory = File(filesDir, "bundled_models")
-            check(directory.isDirectory || directory.mkdirs()) { "Cannot create model directory" }
-            val destination = File(directory, name)
-            val temporary = File.createTempFile("model-", ".tmp", directory)
-            try {
-                temporary.outputStream().use { output -> input.copyTo(output) }
-                check(temporary.length() > 0) { "Bundled model is empty" }
-                check(temporary.renameTo(destination)) { "Cannot replace bundled model" }
-                return destination.absolutePath
-            } finally {
-                temporary.delete()
             }
         }
     }

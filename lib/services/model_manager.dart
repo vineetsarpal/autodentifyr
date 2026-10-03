@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:ultralytics_yolo/utils/map_converter.dart';
 import 'package:ultralytics_yolo/config/channel_config.dart';
 import 'package:autodentifyr/models/models.dart';
+import 'model_path_cache.dart';
 
 /// Manages YOLO model loading, downloading, and caching.
 ///
@@ -15,6 +16,8 @@ import 'package:autodentifyr/models/models.dart';
 /// - Extracting and caching models locally
 /// - Platform-specific model path management
 class ModelManager {
+  static final _modelPaths = ModelPathCache();
+
   /// Base URL for downloading model files from GitHub releases
   static const String _modelDownloadBaseUrl =
       'https://github.com/ultralytics/yolo-flutter-app/releases/download/v0.0.0';
@@ -38,15 +41,38 @@ class ModelManager {
   ModelManager({this.onDownloadProgress, this.onStatusUpdate});
 
   /// Gets the appropriate model path for the current platform and model type.
-  Future<String?> getModelPath(ModelType modelType) async => Platform.isIOS
-      ? _getIOSModelPath(modelType)
-      : Platform.isAndroid
-      ? _getAndroidModelPath(modelType)
-      : null;
+  Future<String?> getModelPath(ModelType modelType) async {
+    final platform = Platform.isIOS
+        ? 'ios'
+        : Platform.isAndroid
+        ? 'android'
+        : null;
+    if (platform == null) return null;
+
+    _updateStatus('Checking for ${modelType.modelName} model...');
+    return _modelPaths.resolve(
+      key: (
+        platform: platform,
+        modelName: modelType.modelName,
+        task: modelType.task.name,
+      ),
+      onStatus: onStatusUpdate,
+      onProgress: onDownloadProgress,
+      load: (status, progress) {
+        // The resolver broadcasts updates to every manager sharing this load.
+        final resolver = ModelManager(
+          onStatusUpdate: status,
+          onDownloadProgress: progress,
+        );
+        return platform == 'ios'
+            ? resolver._getIOSModelPath(modelType)
+            : resolver._getAndroidModelPath(modelType);
+      },
+    );
+  }
 
   /// Gets the iOS model path (.mlpackage format).
   Future<String?> _getIOSModelPath(ModelType modelType) async {
-    _updateStatus('Checking for ${modelType.modelName} model...');
     try {
       final bundleCheck = await _checkModelExistsInBundle(modelType.modelName);
       if (bundleCheck['exists'] == true) return modelType.modelName;
@@ -98,11 +124,10 @@ class ModelManager {
 
   /// Gets the Android model path (.tflite format)
   Future<String?> _getAndroidModelPath(ModelType modelType) async {
-    _updateStatus('Checking for ${modelType.modelName} model...');
     final bundledName = '${modelType.modelName}.tflite';
 
     // LiteRT 2.x requires a filesystem path even when metadata can be read
-    // directly from Android assets. Refresh the copy from the installed bundle.
+    // directly from Android assets. Materialize the installed bundle first.
     final bundledPath = await _androidAssetsChannel.invokeMethod<String>(
       'materializeModel',
       {'name': bundledName},

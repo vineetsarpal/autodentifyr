@@ -79,4 +79,5 @@ flutter {
 dependencies {
     // YOLO supplies its compatible LiteRT runtime; adding 1.x support duplicates its API classes.
     implementation("androidx.camera:camera-core:1.4.2")
+    testImplementation("junit:junit:4.13.2")
 }

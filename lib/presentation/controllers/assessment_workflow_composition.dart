@@ -20,10 +20,22 @@ import 'package:autodentifyr/services/assessment_report_delivery.dart';
 import 'package:autodentifyr/services/assessment_repository.dart';
 import 'package:autodentifyr/services/assessment_severity_source.dart';
 
-Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen() async {
-  final repository = await openDeviceLocalAssessmentRepository();
-  final evidenceFileStore = await openDeviceEvidenceFileStore();
-  final reportFileStore = await openDeviceLocalAssessmentReportStore();
+/// Creates a workflow route that owns its lazy still-image inference service.
+/// An injected [inferenceService] is also released when the route is disposed.
+Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen({
+  AssessmentRepository? repository,
+  EvidenceFileStore? evidenceFileStore,
+  AssessmentReportFileStore? reportFileStore,
+  YoloEvidenceInferenceService? inferenceService,
+  EvidenceAcquisitionService? acquisitionService,
+}) async {
+  final resolvedRepository =
+      repository ?? await openDeviceLocalAssessmentRepository();
+  final resolvedEvidenceFileStore =
+      evidenceFileStore ?? await openDeviceEvidenceFileStore();
+  final resolvedReportFileStore =
+      reportFileStore ?? await openDeviceLocalAssessmentReportStore();
+  final workflowInference = inferenceService ?? YoloEvidenceInferenceService();
   var sequence = 0;
   String nextId() {
     sequence++;
@@ -46,10 +58,11 @@ Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen() async {
       AssessmentStage.evidence => AssessmentEvidenceScreen(
         controller: AssessmentEvidenceController(
           assessmentId: assessmentId,
-          repository: repository,
-          acquisitionService: ImagePickerEvidenceAcquisitionService(),
-          inferenceService: YoloEvidenceInferenceService(),
-          fileStore: evidenceFileStore,
+          repository: resolvedRepository,
+          acquisitionService:
+              acquisitionService ?? ImagePickerEvidenceAcquisitionService(),
+          inferenceService: workflowInference,
+          fileStore: resolvedEvidenceFileStore,
           idGenerator: nextId,
           now: DateTime.now,
         ),
@@ -58,7 +71,7 @@ Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen() async {
       AssessmentStage.findings => AssessmentFindingReviewScreen(
         controller: AssessmentFindingReviewController(
           assessmentId: assessmentId,
-          repository: repository,
+          repository: resolvedRepository,
           idGenerator: nextId,
           now: DateTime.now,
         ),
@@ -67,7 +80,7 @@ Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen() async {
       AssessmentStage.severity => AssessmentSeverityScreen(
         controller: AssessmentSeverityController(
           assessmentId: assessmentId,
-          repository: repository,
+          repository: resolvedRepository,
           source: const UnavailableSeveritySuggestionSource(),
           now: DateTime.now,
         ),
@@ -76,7 +89,7 @@ Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen() async {
       AssessmentStage.estimate => AssessmentEstimateScreen(
         controller: AssessmentEstimateController(
           assessmentId: assessmentId,
-          repository: repository,
+          repository: resolvedRepository,
           source: const UnavailableAssessmentEstimateSource(),
           idGenerator: nextId,
           now: DateTime.now,
@@ -86,18 +99,19 @@ Future<AssessmentWorkflowScreen> openAssessmentWorkflowScreen() async {
       AssessmentStage.finalReview => AssessmentCompletionScreen(
         controller: AssessmentCompletionController(
           assessmentId: assessmentId,
-          repository: repository,
+          repository: resolvedRepository,
           idGenerator: nextId,
           now: DateTime.now,
         ),
-        reportDelivery: DeviceAssessmentReportDelivery(reportFileStore),
+        reportDelivery: DeviceAssessmentReportDelivery(resolvedReportFileStore),
       ),
     };
   }
 
   return AssessmentWorkflowScreen(
+    onDispose: workflowInference.dispose,
     controller: AssessmentWorkflowController(
-      repository: repository,
+      repository: resolvedRepository,
       idGenerator: nextId,
       now: DateTime.now,
     ),

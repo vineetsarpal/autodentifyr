@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -9,6 +10,33 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AssessmentEvidenceController', () {
+    test(
+      'disposed controller ignores pending inference and releases staged state',
+      () async {
+        final repository = InMemoryAssessmentRepository();
+        await repository.save(_draft());
+        final inference = _PendingInferenceService();
+        final controller = AssessmentEvidenceController(
+          assessmentId: 'assessment-1',
+          repository: repository,
+          acquisitionService: _FakeAcquisitionService(),
+          inferenceService: inference,
+          fileStore: _MemoryEvidenceFileStore(),
+          idGenerator: () => 'unused',
+          now: () => DateTime.utc(2026),
+        );
+        await controller.load();
+        final pending = controller.importImage();
+        await inference.started.future;
+        controller.dispose();
+        inference.result.complete(
+          await _FakeInferenceService().analyze(Uint8List(1)),
+        );
+        await pending;
+        expect(controller.state.phase, AssessmentEvidencePhase.idle);
+        expect(controller.state.pendingEvidence, isNull);
+      },
+    );
     test(
       'camera evidence remains transient until the Appraiser accepts it',
       () async {
@@ -363,6 +391,16 @@ class _ResultAcquisitionService implements EvidenceAcquisitionService {
   @override
   Future<EvidenceAcquisitionResult> acquire(CaptureSource source) async =>
       result;
+}
+
+class _PendingInferenceService implements EvidenceInferenceService {
+  final started = Completer<void>();
+  final result = Completer<EvidenceInferenceResult>();
+  @override
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) {
+    started.complete();
+    return result.future;
+  }
 }
 
 class _FakeInferenceService implements EvidenceInferenceService {

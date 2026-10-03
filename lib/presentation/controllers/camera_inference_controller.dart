@@ -45,6 +45,22 @@ class CameraInferenceController extends ChangeNotifier {
   bool _isDisposed = false;
   Future<void>? _loadingFuture;
 
+  // Scope view updates so detection callbacks do not rebuild the camera or
+  // controls. The controller's own notifications remain available to callers
+  // that need to observe all state changes.
+  final _modelChanges = ChangeNotifier();
+  final _detectionChanges = ChangeNotifier();
+  final _statsChanges = ChangeNotifier();
+  final _controlChanges = ChangeNotifier();
+  final _captureChanges = ChangeNotifier();
+  (int, String, String) _lastDisplayedStats = (0, '0.0', '0');
+
+  Listenable get modelChanges => _modelChanges;
+  Listenable get detectionChanges => _detectionChanges;
+  Listenable get statsChanges => _statsChanges;
+  Listenable get controlChanges => _controlChanges;
+  Listenable get captureChanges => _captureChanges;
+
   // Getters
   int get detectionCount => _detectionCount;
   double get currentFps => _currentFps;
@@ -65,11 +81,15 @@ class CameraInferenceController extends ChangeNotifier {
   CameraInferenceController() {
     _modelManager = ModelManager(
       onDownloadProgress: (progress) {
+        if (_isDisposed) return;
         _downloadProgress = progress;
+        _modelChanges.notifyListeners();
         notifyListeners();
       },
       onStatusUpdate: (message) {
+        if (_isDisposed) return;
         _loadingMessage = message;
+        _modelChanges.notifyListeners();
         notifyListeners();
       },
     );
@@ -102,7 +122,22 @@ class CameraInferenceController extends ChangeNotifier {
     _detectionCount = results.length;
     _discoverLabels(results);
     _calculatePrice(results);
+    _detectionChanges.notifyListeners();
+    _notifyStatsIfChanged();
     notifyListeners();
+  }
+
+  void _notifyStatsIfChanged() {
+    // Match DetectionStatsDisplay's formatting without changing the raw
+    // metrics, calculations, or result delivery cadence.
+    final displayed = (
+      _detectionCount,
+      _currentFps.toStringAsFixed(1),
+      _totalPriceEstimate.toStringAsFixed(0),
+    );
+    if (displayed == _lastDisplayedStats) return;
+    _lastDisplayedStats = displayed;
+    _statsChanges.notifyListeners();
   }
 
   void _discoverLabels(List<YOLOResult> results) {
@@ -150,6 +185,7 @@ class CameraInferenceController extends ChangeNotifier {
 
     if ((_currentFps - fps).abs() > 0.1) {
       _currentFps = fps;
+      _notifyStatsIfChanged();
       notifyListeners();
     }
   }
@@ -159,6 +195,7 @@ class CameraInferenceController extends ChangeNotifier {
 
     if ((_currentZoomLevel - zoomLevel).abs() > 0.01) {
       _currentZoomLevel = zoomLevel;
+      _controlChanges.notifyListeners();
       notifyListeners();
     }
   }
@@ -167,6 +204,7 @@ class CameraInferenceController extends ChangeNotifier {
     if (_isDisposed) return;
 
     _activeSlider = (_activeSlider == type) ? SliderType.none : type;
+    _controlChanges.notifyListeners();
     notifyListeners();
   }
 
@@ -177,6 +215,7 @@ class CameraInferenceController extends ChangeNotifier {
       if ((_confidenceThreshold - value).abs() > 0.01) {
         _confidenceThreshold = value;
         _yoloController.setConfidenceThreshold(value);
+        _controlChanges.notifyListeners();
         notifyListeners();
       }
     }
@@ -188,6 +227,7 @@ class CameraInferenceController extends ChangeNotifier {
     if ((_currentZoomLevel - zoomLevel).abs() > 0.01) {
       _currentZoomLevel = zoomLevel;
       _yoloController.setZoomLevel(zoomLevel);
+      _controlChanges.notifyListeners();
       notifyListeners();
     }
   }
@@ -216,6 +256,8 @@ class CameraInferenceController extends ChangeNotifier {
     _downloadProgress = 0.0;
     _detectionCount = 0;
     _currentFps = 0.0;
+    _modelChanges.notifyListeners();
+    _notifyStatsIfChanged();
     notifyListeners();
 
     try {
@@ -227,6 +269,7 @@ class CameraInferenceController extends ChangeNotifier {
       _isModelLoading = false;
       _loadingMessage = '';
       _downloadProgress = 0.0;
+      _modelChanges.notifyListeners();
       notifyListeners();
 
       if (modelPath == null) {
@@ -243,18 +286,23 @@ class CameraInferenceController extends ChangeNotifier {
       _isModelLoading = false;
       _loadingMessage = 'Failed to load model: ${error.message}';
       _downloadProgress = 0.0;
+      _modelChanges.notifyListeners();
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> setCapturedImage(Uint8List image) async {
+    if (_isDisposed) return;
     _capturedImage = image;
+    _captureChanges.notifyListeners();
     notifyListeners();
   }
 
   void clearCapturedImage() {
+    if (_isDisposed) return;
     _capturedImage = null;
+    _captureChanges.notifyListeners();
     notifyListeners();
   }
 
@@ -286,6 +334,11 @@ class CameraInferenceController extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _modelChanges.dispose();
+    _detectionChanges.dispose();
+    _statsChanges.dispose();
+    _controlChanges.dispose();
+    _captureChanges.dispose();
     super.dispose();
   }
 }

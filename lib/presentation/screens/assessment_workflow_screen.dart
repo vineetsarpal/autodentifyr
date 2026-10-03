@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
 
@@ -40,6 +42,7 @@ class AssessmentWorkflowScreen extends StatefulWidget {
     required this.openSeverity,
     required this.openCompletion,
     this.openGuidedStage,
+    this.onDispose,
   });
 
   final AssessmentWorkflowController controller;
@@ -49,6 +52,7 @@ class AssessmentWorkflowScreen extends StatefulWidget {
   final AssessmentStageOpener openSeverity;
   final AssessmentStageOpener openCompletion;
   final GuidedAssessmentStageOpener? openGuidedStage;
+  final Future<void> Function()? onDispose;
 
   @override
   State<AssessmentWorkflowScreen> createState() =>
@@ -56,6 +60,19 @@ class AssessmentWorkflowScreen extends StatefulWidget {
 }
 
 class _AssessmentWorkflowScreenState extends State<AssessmentWorkflowScreen> {
+  @override
+  void dispose() {
+    final release = widget.onDispose;
+    if (release != null) {
+      unawaited(
+        release().catchError((Object error) {
+          debugPrint('Unable to release workflow inference: $error');
+        }),
+      );
+    }
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();

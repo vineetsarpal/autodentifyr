@@ -72,8 +72,16 @@ class AssessmentEvidenceController extends ChangeNotifier {
   final DateTime Function() _now;
 
   AssessmentEvidenceState _state = const AssessmentEvidenceState();
+  bool _disposed = false;
 
   AssessmentEvidenceState get state => _state;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _state = const AssessmentEvidenceState();
+    super.dispose();
+  }
 
   Future<void> load() async {
     _emit(
@@ -114,6 +122,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
       ),
     );
     final acquisition = await _acquisitionService.acquire(source);
+    if (_disposed) return;
     if (acquisition is EvidenceAcquisitionCancelled) {
       _emit(
         AssessmentEvidenceState(
@@ -155,6 +164,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
     late final List<DamageObservation> observations;
     try {
       analysis = await _inferenceService.analyze(acquisition.evidence.bytes);
+      if (_disposed) return;
       observations = _linkObservations(captureId, analysis.observations);
     } catch (error) {
       _emit(
@@ -356,6 +366,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
     );
     try {
       final analysis = await _inferenceService.analyze(pending.evidence.bytes);
+      if (_disposed) return;
       _emit(
         AssessmentEvidenceState(
           phase: AssessmentEvidencePhase.staged,
@@ -384,6 +395,7 @@ class AssessmentEvidenceController extends ChangeNotifier {
   }
 
   void _emit(AssessmentEvidenceState state) {
+    if (_disposed) return;
     _state = state;
     notifyListeners();
   }

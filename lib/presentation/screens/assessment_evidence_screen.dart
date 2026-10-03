@@ -12,6 +12,7 @@ class AssessmentEvidenceScreen extends StatefulWidget {
     this.onContinue,
   });
 
+  /// Owned by this screen. Its inference service is borrowed from the workflow.
   final AssessmentEvidenceController controller;
   final VoidCallback? onContinue;
 
@@ -21,6 +22,12 @@ class AssessmentEvidenceScreen extends StatefulWidget {
 }
 
 class _AssessmentEvidenceScreenState extends State<AssessmentEvidenceScreen> {
+  @override
+  void dispose() {
+    widget.controller.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/models/models.dart';
 import 'package:autodentifyr/services/model_manager.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as image;
 import 'package:image_picker/image_picker.dart';
@@ -181,17 +182,37 @@ class ImagePickerEvidenceAcquisitionService
 }
 
 class YoloEvidenceInferenceService implements EvidenceInferenceService {
-  YoloEvidenceInferenceService({ModelManager? modelManager})
-    : _modelManager = modelManager ?? ModelManager();
+  YoloEvidenceInferenceService({
+    ModelManager? modelManager,
+    YOLO Function(String modelPath)? createYolo,
+  }) : _modelManager = modelManager ?? ModelManager(),
+       _createYolo = createYolo ?? _createIsolatedYolo;
 
   static const runtimeIdentifier = 'ultralytics_yolo-0.6.14/android';
 
   final ModelManager _modelManager;
-  Future<({YOLO yolo, String modelIdentifier})>? _loadedModel;
+  final YOLO Function(String modelPath) _createYolo;
+  ({YOLO yolo, String modelIdentifier})? _loadedModel;
+  Future<void> _operations = Future.value();
+  Future<void>? _disposal;
+  bool _closing = false;
+
+  static YOLO _createIsolatedYolo(String modelPath) => YOLO(
+    modelPath: modelPath,
+    task: ModelType.detect.task,
+    useMultiInstance: true,
+  );
 
   @override
-  Future<EvidenceInferenceResult> analyze(Uint8List bytes) async {
-    final loaded = await (_loadedModel ??= _loadModel());
+  Future<EvidenceInferenceResult> analyze(Uint8List bytes) {
+    if (_closing) {
+      return Future.error(StateError('Evidence inference service is closed.'));
+    }
+    return _enqueue(() => _analyze(bytes));
+  }
+
+  Future<EvidenceInferenceResult> _analyze(Uint8List bytes) async {
+    final loaded = _loadedModel ??= await _loadModel();
     final result = await loaded.yolo.predict(bytes);
     final rawDetections = result['detections'] ?? result['boxes'];
     final detections = rawDetections is List
@@ -229,13 +250,45 @@ class YoloEvidenceInferenceService implements EvidenceInferenceService {
   Future<({YOLO yolo, String modelIdentifier})> _loadModel() async {
     final modelPath = await _modelManager.getModelPath(ModelType.detect);
     if (modelPath == null) throw StateError('Damage model is unavailable.');
-    final yolo = YOLO(modelPath: modelPath, task: ModelType.detect.task);
-    await yolo.loadModel();
-    await yolo.predictorInstance();
+    final yolo = _createYolo(modelPath);
+    try {
+      if (!await yolo.loadModel()) {
+        throw StateError('Damage model failed to load.');
+      }
+      await yolo.predictorInstance();
+    } catch (error, stackTrace) {
+      try {
+        await yolo.dispose();
+      } catch (cleanupError) {
+        debugPrint('Unable to release failed evidence model: $cleanupError');
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     return (
       yolo: yolo,
       modelIdentifier: modelPath.split(Platform.pathSeparator).last,
     );
+  }
+
+  /// Releases this workflow's engine after already queued predictions finish.
+  /// New predictions are refused as soon as disposal begins.
+  Future<void> dispose() {
+    _closing = true;
+    return _disposal ??= _enqueue(() async {
+      final loaded = _loadedModel;
+      _loadedModel = null;
+      await loaded?.yolo.dispose();
+    });
+  }
+
+  Future<T> _enqueue<T>(Future<T> Function() operation) {
+    final result = _operations.then((_) => operation());
+    // A failed image/load must not prevent the Appraiser's next retry.
+    _operations = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
   }
 
   static double _number(

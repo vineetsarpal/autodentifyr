@@ -1,13 +1,8 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:autodentifyr/models/models.dart';
 import 'package:autodentifyr/presentation/controllers/camera_inference_controller.dart';
-import 'package:autodentifyr/presentation/widgets/camera_inference_content.dart';
-import 'package:autodentifyr/presentation/widgets/camera_inference_overlay.dart';
-import 'package:autodentifyr/presentation/widgets/camera_controls.dart';
-import 'package:autodentifyr/presentation/widgets/threshold_slider.dart';
-import 'package:autodentifyr/presentation/widgets/bounding_box_overlay.dart';
+import 'package:autodentifyr/presentation/widgets/camera_inference_body.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
 
 /// A screen that demonstrates real-time YOLO inference using the device camera.
@@ -84,52 +79,13 @@ class _CameraInferenceScreenState extends State<CameraInferenceScreen>
 
     return Scaffold(
       appBar: AppBar(title: const Text('Live Detection'), centerTitle: true),
-      body: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, child) {
-          return Stack(
-            children: [
-              RepaintBoundary(
-                key: _captureKey,
-                child: Stack(
-                  children: [
-                    CameraInferenceContent(
-                      key: ValueKey('camera_content_$_rebuildKey'),
-                      controller: _controller,
-                      rebuildKey: _rebuildKey,
-                    ),
-                    BoundingBoxOverlay(
-                      results: _controller.currentResults,
-                      controller: _controller,
-                    ),
-                    CameraInferenceOverlay(
-                      controller: _controller,
-                      isLandscape: isLandscape,
-                    ),
-                  ],
-                ),
-              ),
-              ThresholdSlider(
-                activeSlider: _controller.activeSlider,
-                confidenceThreshold: _controller.confidenceThreshold,
-                onValueChanged: _controller.updateSliderValue,
-                onClose: () => _controller.toggleSlider(SliderType.none),
-                isLandscape: isLandscape,
-              ),
-              CameraControls(
-                currentZoomLevel: _controller.currentZoomLevel,
-                activeSlider: _controller.activeSlider,
-                onZoomChanged: _controller.setZoomLevel,
-                onSliderToggled: _controller.toggleSlider,
-                onCapture: _captureScreenshot,
-                isLandscape: isLandscape,
-                isCapturing: _controller.isCapturing,
-              ),
-              if (_controller.capturedImage != null)
-                _buildCapturedImageOverlay(),
-            ],
-          );
-        },
+      body: CameraInferenceBody(
+        controller: _controller,
+        rebuildKey: _rebuildKey,
+        isLandscape: isLandscape,
+        captureKey: _captureKey,
+        onCapture: _captureScreenshot,
+        capturedImageBuilder: (_) => _buildCapturedImageOverlay(),
       ),
     );
   }

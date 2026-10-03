@@ -28,13 +28,19 @@ class CameraInferenceOverlay extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            DetectionStatsDisplay(
-              detectionCount: controller.detectionCount,
-              currentFps: controller.currentFps,
-              totalPriceEstimate: controller.totalPriceEstimate,
+            ListenableBuilder(
+              listenable: controller.statsChanges,
+              builder: (context, _) => DetectionStatsDisplay(
+                detectionCount: controller.detectionCount,
+                currentFps: controller.currentFps,
+                totalPriceEstimate: controller.totalPriceEstimate,
+              ),
             ),
             const SizedBox(height: 8),
-            _buildThresholdPills(),
+            ListenableBuilder(
+              listenable: controller.controlChanges,
+              builder: (context, _) => _buildThresholdPills(),
+            ),
           ],
         ),
       ),
