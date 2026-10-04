@@ -88,7 +88,26 @@ afterward to reinstall the normal app. Android models remain bundled in native
 assets; the app copies them to private storage because LiteRT requires an absolute
 file path.
 
-### Google Play releases
+### Android release artifacts
+
+For direct APK distribution, build a separate release APK for each supported
+architecture:
+
+```bash
+scripts/build_android_release.sh
+```
+
+This creates `armeabi-v7a`, `arm64-v8a`, and `x86_64` APKs under
+`build/app/outputs/flutter-apk/`. Distribute the APK matching the device's ABI;
+retain all three artifacts for the full supported device range. See the
+[direct Android distribution guide](docs/release/android-direct-distribution.md)
+for artifact selection, signing checks, and the explicit universal APK option.
+
+For Google Play, build the signed App Bundle:
+
+```bash
+scripts/build_android_release.sh appbundle
+```
 
 Follow the [Google Play release runbook](docs/release/google-play-release-runbook.md)
 for versioning, release validation, signed App Bundle creation, Internal testing,

@@ -2,6 +2,8 @@
 
 Use this runbook for every AutoDentifyr Android release. Google Play releases
 use a signed Android App Bundle (`.aab`), not an APK.
+For distribution outside Google Play, use the
+[direct Android distribution guide](android-direct-distribution.md).
 
 ## One-time setup
 
@@ -73,7 +75,7 @@ understood nonfatal warnings do not by themselves fail the release.
 Build the signed release bundle:
 
 ```bash
-flutter build appbundle --release
+scripts/build_android_release.sh appbundle
 ```
 
 The output is:
@@ -81,6 +83,13 @@ The output is:
 ```text
 build/app/outputs/bundle/release/app-release.aab
 ```
+
+The script includes ARM32, ARM64, and x86-64 and forwards additional Flutter
+build arguments, such as `--build-name` and `--build-number`. It uses the existing
+release signing configuration. The equivalent direct command is
+`flutter build appbundle --release --target-platform=android-arm,android-arm64,android-x64`.
+Google Play produces device-specific downloads from the bundle; compare delivered
+size rather than the size of the uploaded AAB when evaluating user download size.
 
 Verify the bundle signature and record its checksum:
 
