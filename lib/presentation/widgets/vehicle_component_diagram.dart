@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:autodentifyr/models/vehicle_component.dart';
@@ -46,6 +47,24 @@ class _VehicleComponentDiagramState extends State<VehicleComponentDiagram>
   late final AnimationController _selectionController;
   VehicleComponentId? _previousSelectedId;
   VehicleComponentId? _pressedComponentId;
+  _DiagramIndex? _index;
+
+  _DiagramIndex _indexFor(VehicleComponentGeometry geometry) {
+    final previous = _index;
+    if (previous == null ||
+        previous.geometry != geometry ||
+        previous.view != widget.view ||
+        !listEquals(previous.candidates, widget.candidateIds) ||
+        !listEquals(previous.findings, widget.existingFindings)) {
+      _index = _DiagramIndex(
+        geometry,
+        widget.view,
+        widget.candidateIds,
+        widget.existingFindings,
+      );
+    }
+    return _index!;
+  }
 
   @override
   void initState() {
@@ -116,25 +135,56 @@ class _VehicleComponentDiagramState extends State<VehicleComponentDiagram>
     );
   }
 
-  Widget _surface(VehicleComponentGeometry geometry) => AnimatedBuilder(
-    animation: _selectionController,
-    builder: (context, _) => _GeometrySurface(
-      geometry: geometry,
-      view: widget.view,
-      selectedId: widget.selectedId,
-      previousSelectedId: _previousSelectedId,
-      selectionProgress: _selectionController.value,
-      suggestedId: widget.suggestedId,
-      candidateIds: widget.candidateIds,
-      pressedComponentId: _pressedComponentId,
-      onPressedComponentChanged: (componentId) =>
-          setState(() => _pressedComponentId = componentId),
-      existingFindings: widget.existingFindings,
-      onExistingFindingSelected: widget.onExistingFindingSelected,
-      onSelected: widget.onSelected,
-      onTapResolution: widget.onTapResolution,
-    ),
+  Widget _surface(VehicleComponentGeometry geometry) => _GeometrySurface(
+    geometry: geometry,
+    view: widget.view,
+    index: _indexFor(geometry),
+    selectedId: widget.selectedId,
+    previousSelectedId: _previousSelectedId,
+    selectionProgress: _selectionController,
+    suggestedId: widget.suggestedId,
+    pressedComponentId: _pressedComponentId,
+    onPressedComponentChanged: (componentId) =>
+        setState(() => _pressedComponentId = componentId),
+    onExistingFindingSelected: widget.onExistingFindingSelected,
+    onSelected: widget.onSelected,
+    onTapResolution: widget.onTapResolution,
   );
+}
+
+/// Copies mutable caller lists so in-place changes invalidate the next snapshot.
+/// Ordering and membership work happens on input changes, never animation ticks.
+class _DiagramIndex {
+  _DiagramIndex(
+    this.geometry,
+    this.view,
+    List<VehicleComponentId> candidates,
+    List<VehicleComponentExistingFinding> findings,
+  ) : candidates = List.unmodifiable(candidates),
+      findings = List.unmodifiable(findings),
+      semanticOccurrences = List.unmodifiable(
+        geometry.view(view).occurrences.toList()..sort(
+          (left, right) => left.semanticsOrder.compareTo(right.semanticsOrder),
+        ),
+      ) {
+    for (var index = 0; index < candidates.length; index++) {
+      candidateIndices.putIfAbsent(candidates[index], () => index);
+    }
+    for (final finding in findings) {
+      findingsByComponent
+          .putIfAbsent(finding.componentId, () => [])
+          .add(finding);
+    }
+  }
+
+  final VehicleComponentGeometry geometry;
+  final VehicleView view;
+  final List<VehicleComponentId> candidates;
+  final List<VehicleComponentExistingFinding> findings;
+  final List<VehicleComponentOccurrence> semanticOccurrences;
+  final candidateIndices = <VehicleComponentId, int>{};
+  final findingsByComponent =
+      <VehicleComponentId, List<VehicleComponentExistingFinding>>{};
 }
 
 class _GeometrySurface extends StatelessWidget {
@@ -145,10 +195,9 @@ class _GeometrySurface extends StatelessWidget {
     required this.previousSelectedId,
     required this.selectionProgress,
     required this.suggestedId,
-    required this.candidateIds,
+    required this.index,
     required this.pressedComponentId,
     required this.onPressedComponentChanged,
-    required this.existingFindings,
     required this.onExistingFindingSelected,
     required this.onSelected,
     required this.onTapResolution,
@@ -158,12 +207,11 @@ class _GeometrySurface extends StatelessWidget {
   final VehicleView view;
   final VehicleComponentId? selectedId;
   final VehicleComponentId? previousSelectedId;
-  final double selectionProgress;
+  final Animation<double> selectionProgress;
   final VehicleComponentId? suggestedId;
-  final List<VehicleComponentId> candidateIds;
+  final _DiagramIndex index;
   final VehicleComponentId? pressedComponentId;
   final ValueChanged<VehicleComponentId?> onPressedComponentChanged;
-  final List<VehicleComponentExistingFinding> existingFindings;
   final ValueChanged<VehicleComponentExistingFinding>?
   onExistingFindingSelected;
   final ValueChanged<VehicleComponentId> onSelected;
@@ -205,9 +253,8 @@ class _GeometrySurface extends StatelessWidget {
                           previousSelectedId: previousSelectedId,
                           selectionProgress: selectionProgress,
                           suggestedId: suggestedId,
-                          candidateIds: candidateIds,
+                          index: index,
                           pressedComponentId: pressedComponentId,
-                          existingFindings: existingFindings,
                           colorScheme: colorScheme,
                         ),
                       ),
@@ -248,12 +295,7 @@ class _GeometrySurface extends StatelessWidget {
                         },
                       ),
                     ),
-                    for (final occurrence
-                        in geometryView.occurrences.toList()..sort(
-                          (left, right) => left.semanticsOrder.compareTo(
-                            right.semanticsOrder,
-                          ),
-                        ))
+                    for (final occurrence in index.semanticOccurrences)
                       Positioned.fromRect(
                         rect: transform.toLocalBounds(
                           occurrence.hitBounds,
@@ -270,14 +312,10 @@ class _GeometrySurface extends StatelessWidget {
                               occurrence.componentId,
                               selectedId,
                               suggestedId,
-                              candidateIds,
-                              existingFindings
-                                  .where(
-                                    (finding) =>
-                                        finding.componentId ==
-                                        occurrence.componentId,
-                                  )
-                                  .toList(growable: false),
+                              index.candidateIndices,
+                              index.findingsByComponent[occurrence
+                                      .componentId] ??
+                                  const [],
                             ),
                             onTap: () => onSelected(occurrence.componentId),
                             child: const SizedBox.expand(),
@@ -285,35 +323,22 @@ class _GeometrySurface extends StatelessWidget {
                         ),
                       ),
                     for (final occurrence in geometryView.occurrences)
-                      if (existingFindings.any(
-                        (finding) =>
-                            finding.componentId == occurrence.componentId,
-                      ))
-                        for (
-                          var index = 0;
-                          index <
-                              existingFindings
-                                  .where(
-                                    (finding) =>
-                                        finding.componentId ==
-                                        occurrence.componentId,
-                                  )
-                                  .length;
-                          index++
-                        )
-                          _existingBadge(
-                            context,
-                            transform,
-                            occurrence,
-                            existingFindings
-                                .where(
-                                  (finding) =>
-                                      finding.componentId ==
-                                      occurrence.componentId,
-                                )
-                                .toList(growable: false),
-                            index,
-                          ),
+                      for (
+                        var findingIndex = 0;
+                        findingIndex <
+                            (index
+                                    .findingsByComponent[occurrence.componentId]
+                                    ?.length ??
+                                0);
+                        findingIndex++
+                      )
+                        _existingBadge(
+                          context,
+                          transform,
+                          occurrence,
+                          index.findingsByComponent[occurrence.componentId]!,
+                          findingIndex,
+                        ),
                   ],
                 );
               },
@@ -384,7 +409,7 @@ class _GeometrySurface extends StatelessWidget {
 }
 
 class _VehicleComponentPainter extends CustomPainter {
-  const _VehicleComponentPainter({
+  _VehicleComponentPainter({
     required this.geometry,
     required this.view,
     required this.transform,
@@ -392,22 +417,20 @@ class _VehicleComponentPainter extends CustomPainter {
     required this.previousSelectedId,
     required this.selectionProgress,
     required this.suggestedId,
-    required this.candidateIds,
+    required this.index,
     required this.pressedComponentId,
-    required this.existingFindings,
     required this.colorScheme,
-  });
+  }) : super(repaint: selectionProgress);
 
   final VehicleComponentGeometry geometry;
   final VehicleComponentGeometryView view;
   final VehicleComponentGeometryTransform transform;
   final VehicleComponentId? selectedId;
   final VehicleComponentId? previousSelectedId;
-  final double selectionProgress;
+  final Animation<double> selectionProgress;
   final VehicleComponentId? suggestedId;
-  final List<VehicleComponentId> candidateIds;
+  final _DiagramIndex index;
   final VehicleComponentId? pressedComponentId;
-  final List<VehicleComponentExistingFinding> existingFindings;
   final ColorScheme colorScheme;
 
   @override
@@ -465,8 +488,8 @@ class _VehicleComponentPainter extends CustomPainter {
     for (final occurrence in view.occurrences) {
       final treatment = _selectionTreatment(occurrence.componentId);
       final pressed = occurrence.componentId == pressedComponentId;
-      final existing = existingFindings.any(
-        (finding) => finding.componentId == occurrence.componentId,
+      final existing = index.findingsByComponent.containsKey(
+        occurrence.componentId,
       );
       canvas.drawPath(
         occurrence.visualPath,
@@ -506,8 +529,8 @@ class _VehicleComponentPainter extends CustomPainter {
         _drawSuggestedMarker(canvas, occurrence.visualPath.getBounds());
       }
       if (selectedId == null) {
-        final candidateIndex = candidateIds.indexOf(occurrence.componentId);
-        if (candidateIndex >= 0) {
+        final candidateIndex = index.candidateIndices[occurrence.componentId];
+        if (candidateIndex != null) {
           _drawCandidateMarker(
             canvas,
             occurrence.visualPath.getBounds(),
@@ -520,8 +543,8 @@ class _VehicleComponentPainter extends CustomPainter {
   }
 
   double _selectionTreatment(VehicleComponentId componentId) {
-    if (selectedId == componentId) return selectionProgress;
-    if (previousSelectedId == componentId) return 1 - selectionProgress;
+    if (selectedId == componentId) return selectionProgress.value;
+    if (previousSelectedId == componentId) return 1 - selectionProgress.value;
     return 0;
   }
 
@@ -639,9 +662,8 @@ class _VehicleComponentPainter extends CustomPainter {
       oldDelegate.previousSelectedId != previousSelectedId ||
       oldDelegate.selectionProgress != selectionProgress ||
       oldDelegate.suggestedId != suggestedId ||
-      oldDelegate.candidateIds != candidateIds ||
+      oldDelegate.index != index ||
       oldDelegate.pressedComponentId != pressedComponentId ||
-      oldDelegate.existingFindings != existingFindings ||
       oldDelegate.colorScheme != colorScheme ||
       oldDelegate.transform.localSize != transform.localSize;
 }
@@ -650,17 +672,15 @@ String _semanticLabel(
   VehicleComponentId componentId,
   VehicleComponentId? selectedId,
   VehicleComponentId? suggestedId,
-  List<VehicleComponentId> candidateIds,
+  Map<VehicleComponentId, int> candidateIndices,
   List<VehicleComponentExistingFinding> existingFindings,
 ) {
   final state = <String>[];
   if (componentId == selectedId) state.add('Selected');
   if (componentId == suggestedId) state.add('Suggested');
-  final candidateIndex = candidateIds.indexOf(componentId);
-  if (candidateIndex >= 0) state.add('Possible match ${candidateIndex + 1}');
-  final existing = existingFindings
-      .where((finding) => finding.componentId == componentId)
-      .toList(growable: false);
+  final candidateIndex = candidateIndices[componentId];
+  if (candidateIndex != null) state.add('Possible match ${candidateIndex + 1}');
+  final existing = existingFindings;
   if (existing.isNotEmpty) {
     final confirmed = existing
         .where((finding) => finding.statusLabel == 'Confirmed')
