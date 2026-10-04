@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
 import 'package:autodentifyr/presentation/bloc/auth/auth_bloc.dart';
 import 'package:sign_in_button/sign_in_button.dart';
+import 'package:autodentifyr/presentation/widgets/display_sized_asset_image.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -66,8 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: AppPallete.whiteColor,
                         size: 80,
                       ), */
-                      Image.asset(
-                        'assets/app_icon.png',
+                      const DisplaySizedAssetImage(
+                        asset: 'assets/app_icon.png',
                         width: 100,
                         height: 100,
                       ),

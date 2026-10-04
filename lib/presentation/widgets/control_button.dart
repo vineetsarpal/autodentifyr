@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
+import 'package:autodentifyr/presentation/widgets/display_sized_asset_image.dart';
 
 /// A circular control button that can display an icon, image, or text
 class ControlButton extends StatelessWidget {
@@ -29,8 +30,8 @@ class ControlButton extends StatelessWidget {
       );
     } else if (content.toString().contains('assets/')) {
       return IconButton(
-        icon: Image.asset(
-          content,
+        icon: DisplaySizedAssetImage(
+          asset: content,
           width: 24,
           height: 24,
           color: AppPalette.whiteColor,

@@ -5,6 +5,7 @@ import 'package:autodentifyr/presentation/bloc/auth/auth_bloc.dart';
 import 'package:autodentifyr/presentation/screens/camera_inference_screen.dart';
 import 'package:autodentifyr/presentation/screens/single_image_screen.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_workflow_composition.dart';
+import 'package:autodentifyr/presentation/widgets/display_sized_asset_image.dart';
 
 /// Home screen that presents mode selection after login
 class HomeScreen extends StatelessWidget {
@@ -51,8 +52,8 @@ class HomeScreen extends StatelessWidget {
                   color: AppPallete.whiteColor,
                   size: 80,
                 ), */
-                      Image.asset(
-                        'assets/app_icon.png',
+                      const DisplaySizedAssetImage(
+                        asset: 'assets/app_icon.png',
                         width: 100,
                         height: 100,
                       ),

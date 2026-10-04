@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:autodentifyr/models/assessment.dart';
 import 'package:autodentifyr/presentation/widgets/assessment_date_time.dart';
+import 'package:autodentifyr/presentation/widgets/thumbnail_file_image.dart';
 
 class AssessmentEvidenceSelector extends StatelessWidget {
   const AssessmentEvidenceSelector({
@@ -41,8 +42,12 @@ class AssessmentEvidenceSelector extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               child: SizedBox.square(
                 dimension: 56,
-                child: Image.file(
-                  File(capture.localPath),
+                child: Image(
+                  image: ThumbnailFileImage(
+                    File(capture.localPath),
+                    pixelExtent: (56 * MediaQuery.devicePixelRatioOf(context))
+                        .ceil(),
+                  ),
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) =>
                       const Icon(Icons.broken_image_outlined),
@@ -103,7 +108,7 @@ class AssessmentObservationSelector extends StatelessWidget {
             key: Key('observation-choice-${observation.id}'),
             contentPadding: EdgeInsets.zero,
             value: field.value?.contains(observation.id) ?? false,
-            secondary: _observationThumbnail(observation),
+            secondary: _observationThumbnail(context, observation),
             title: Text('Observation ${index + 1}: ${observation.rawClass}'),
             subtitle: Text(
               '${(observation.confidence * 100).toStringAsFixed(1)}% confidence',
@@ -123,7 +128,10 @@ class AssessmentObservationSelector extends StatelessWidget {
     ),
   );
 
-  Widget _observationThumbnail(DamageObservation observation) {
+  Widget _observationThumbnail(
+    BuildContext context,
+    DamageObservation observation,
+  ) {
     final capture = captures
         .where((value) => value.id == observation.captureId)
         .firstOrNull;
@@ -132,8 +140,11 @@ class AssessmentObservationSelector extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: SizedBox.square(
         dimension: 56,
-        child: Image.file(
-          File(capture.localPath),
+        child: Image(
+          image: ThumbnailFileImage(
+            File(capture.localPath),
+            pixelExtent: (56 * MediaQuery.devicePixelRatioOf(context)).ceil(),
+          ),
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined),
         ),

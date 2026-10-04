@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
+import 'package:autodentifyr/presentation/widgets/display_sized_asset_image.dart';
 
 /// A loading overlay widget that displays model loading progress
 class ModelLoadingOverlay extends StatelessWidget {
@@ -20,8 +21,8 @@ class ModelLoadingOverlay extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/app_icon.png',
+            DisplaySizedAssetImage(
+              asset: 'assets/app_icon.png',
               width: 120,
               height: 120,
               color: AppPalette.whiteColor.withValues(alpha: 0.8),
