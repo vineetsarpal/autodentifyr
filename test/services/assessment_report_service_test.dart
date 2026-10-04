@@ -25,9 +25,8 @@ void main() {
       );
 
       final pdf = await const AssessmentPdfReportRenderer().render(document);
-      final sharedImage = const AssessmentSharedImageReportRenderer().render(
-        document,
-      );
+      final sharedImage = await const AssessmentSharedImageReportRenderer()
+          .render(document);
 
       expect(document.canonicalText, contains('Preliminary Damage Assessment'));
       expect(document.canonicalText, contains('Revision 1'));
@@ -100,7 +99,9 @@ void main() {
         revisionId: 'revision-photo',
       );
       final pdf = await const AssessmentPdfReportRenderer().render(document);
-      final png = const AssessmentSharedImageReportRenderer().render(document);
+      final png = await const AssessmentSharedImageReportRenderer().render(
+        document,
+      );
       final image = img.decodePng(png.bytes)!;
 
       expect(document.captures.single.localPath, photoPath);

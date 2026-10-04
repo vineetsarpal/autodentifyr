@@ -360,7 +360,7 @@ class _AssessmentCompletionScreenState
     try {
       final artifact = pdf
           ? await const AssessmentPdfReportRenderer().render(document)
-          : const AssessmentSharedImageReportRenderer().render(document);
+          : await const AssessmentSharedImageReportRenderer().render(document);
       await widget.onReportArtifact?.call(artifact);
       final prepared = await widget.reportDelivery?.prepare(artifact);
       if (!mounted) return;

@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -271,182 +271,201 @@ class AssessmentReportService {
 class AssessmentPdfReportRenderer {
   const AssessmentPdfReportRenderer();
 
-  Future<AssessmentReportArtifact> render(
-    AssessmentReportDocument document,
-  ) async {
-    final photos = <String, Uint8List>{};
-    for (final capture in document.captures) {
-      final photo = _readReducedPhoto(capture, maxDimension: 1200);
-      if (photo != null) {
-        photos[capture.id] = Uint8List.fromList(img.encodeJpg(photo));
-      }
+  Future<AssessmentReportArtifact> render(AssessmentReportDocument document) =>
+      compute(
+        _renderPdfReport,
+        _ReportRenderRequest.fromDocument(document),
+        debugLabel: 'assessment-pdf-report',
+      );
+}
+
+Future<AssessmentReportArtifact> _renderPdfReport(
+  _ReportRenderRequest document,
+) async {
+  final photos = <String, Uint8List>{};
+  for (final capture in document.captures) {
+    final photo = _readReducedPhoto(capture, maxDimension: 1200);
+    if (photo != null) {
+      photos[capture.id] = Uint8List.fromList(img.encodeJpg(photo));
     }
-    final pdf = pw.Document(
-      title: '${document.title} - Revision ${document.revisionNumber}',
-      author: 'AutoDentifyr',
-      subject: 'Immutable Preliminary Damage Assessment revision',
-    );
-    pdf.addPage(
-      pw.MultiPage(
-        margin: const pw.EdgeInsets.all(36),
-        header: (context) => pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 8),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
-          ),
-          child: pw.Text(
-            document.title,
-            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-          ),
+  }
+  final pdf = pw.Document(
+    title: '${document.title} - Revision ${document.revisionNumber}',
+    author: 'AutoDentifyr',
+    subject: 'Immutable Preliminary Damage Assessment revision',
+  );
+  pdf.addPage(
+    pw.MultiPage(
+      margin: const pw.EdgeInsets.all(36),
+      header: (context) => pw.Container(
+        padding: const pw.EdgeInsets.only(bottom: 8),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
         ),
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text('Page ${context.pageNumber} of ${context.pagesCount}'),
+        child: pw.Text(
+          document.title,
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
         ),
-        build: (context) => [
-          for (final section in document.sections) ...[
-            pw.Container(
-              margin: const pw.EdgeInsets.only(top: 14),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    section.heading,
-                    style: pw.TextStyle(
-                      fontSize: 13,
-                      fontWeight: pw.FontWeight.bold,
+      ),
+      footer: (context) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('Page ${context.pageNumber} of ${context.pagesCount}'),
+      ),
+      build: (context) => [
+        for (final section in document.sections) ...[
+          pw.Container(
+            margin: const pw.EdgeInsets.only(top: 14),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  section.heading,
+                  style: pw.TextStyle(
+                    fontSize: 13,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                for (final line in section.lines)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 3),
+                    child: pw.Text(
+                      line,
+                      style: const pw.TextStyle(fontSize: 9),
                     ),
                   ),
-                  pw.SizedBox(height: 4),
-                  for (final line in section.lines)
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.only(bottom: 3),
-                      child: pw.Text(
-                        line,
-                        style: const pw.TextStyle(fontSize: 9),
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
-            if (section.heading == 'Photos')
-              for (final capture in document.captures)
-                if (photos[capture.id] case final bytes?)
-                  pw.Container(
-                    margin: const pw.EdgeInsets.only(top: 8, bottom: 8),
-                    child: pw.Image(
-                      pw.MemoryImage(bytes),
-                      height: 180,
-                      fit: pw.BoxFit.contain,
-                    ),
-                  )
-                else
-                  pw.Text('Photo ${capture.id} unavailable on this device.'),
-          ],
+          ),
+          if (section.heading == 'Photos')
+            for (final capture in document.captures)
+              if (photos[capture.id] case final bytes?)
+                pw.Container(
+                  margin: const pw.EdgeInsets.only(top: 8, bottom: 8),
+                  child: pw.Image(
+                    pw.MemoryImage(bytes),
+                    height: 180,
+                    fit: pw.BoxFit.contain,
+                  ),
+                )
+              else
+                pw.Text('Photo ${capture.id} unavailable on this device.'),
         ],
-      ),
-    );
-    return AssessmentReportArtifact(
-      revisionId: document.revisionId,
-      canonicalText: document.canonicalText,
-      mimeType: 'application/pdf',
-      bytes: await pdf.save(),
-    );
-  }
+      ],
+    ),
+  );
+  return AssessmentReportArtifact(
+    revisionId: document.revisionId,
+    canonicalText: document.canonicalText,
+    mimeType: 'application/pdf',
+    bytes: await pdf.save(),
+  );
 }
 
 class AssessmentSharedImageReportRenderer {
   const AssessmentSharedImageReportRenderer();
 
-  AssessmentReportArtifact render(AssessmentReportDocument document) {
-    final displayLines = <_ImageLine>[
-      _ImageLine(document.title, heading: true),
-      for (final section in document.sections) ...[
-        const _ImageLine(''),
-        _ImageLine(section.heading, heading: true),
-        for (final line in section.lines)
-          for (final wrapped in _wrap(line, 92)) _ImageLine(wrapped),
-      ],
-    ];
-    final photos = <(Capture, img.Image?)>[];
-    for (final capture in document.captures) {
-      final photo = _readReducedPhoto(capture, maxDimension: 320);
-      photos.add((capture, photo));
-    }
-    final photoHeight = ((photos.length + 2) ~/ 3) * 340;
-    final image = img.Image(
-      width: 1200,
-      height: 64 + displayLines.length * 30 + photoHeight,
-    );
-    img.fill(image, color: img.ColorRgb8(248, 250, 252));
-    var y = 30;
-    for (final line in displayLines) {
-      img.drawString(
-        image,
-        line.text,
-        font: line.heading ? img.arial24 : img.arial14,
-        x: 36,
-        y: y,
-        color: line.text == 'VOIDED'
-            ? img.ColorRgb8(185, 28, 28)
-            : img.ColorRgb8(13, 38, 61),
+  Future<AssessmentReportArtifact> render(AssessmentReportDocument document) =>
+      compute(
+        _renderSharedImageReport,
+        _ReportRenderRequest.fromDocument(document),
+        debugLabel: 'assessment-shared-image-report',
       );
-      y += 30;
-      if (line.heading && line.text == 'Photos') {
-        for (final (index, slot) in photos.indexed) {
-          final (capture, photo) = slot;
-          final x = 36 + (index % 3) * 380;
-          final top = y + (index ~/ 3) * 340;
-          img.drawString(
-            image,
-            'Photo ${capture.id}',
-            font: img.arial14,
-            x: x,
-            y: top,
-          );
-          if (photo != null) {
-            img.compositeImage(image, photo, dstX: x, dstY: top + 24);
-          } else {
-            img.drawString(
-              image,
-              'Image unavailable on this device',
-              font: img.arial14,
-              x: x,
-              y: top + 32,
-            );
-          }
-        }
-        y += photoHeight;
-      }
-    }
-    return AssessmentReportArtifact(
-      revisionId: document.revisionId,
-      canonicalText: document.canonicalText,
-      mimeType: 'image/png',
-      bytes: Uint8List.fromList(img.encodePng(image)),
-    );
-  }
-
-  static List<String> _wrap(String value, int width) {
-    if (value.length <= width) return [value];
-    final output = <String>[];
-    var current = '';
-    for (final word in value.split(' ')) {
-      if (current.isEmpty) {
-        current = word;
-      } else if (current.length + word.length + 1 <= width) {
-        current = '$current $word';
-      } else {
-        output.add(current);
-        current = word;
-      }
-    }
-    if (current.isNotEmpty) output.add(current);
-    return output;
-  }
 }
 
-img.Image? _readReducedPhoto(Capture capture, {required int maxDimension}) {
+AssessmentReportArtifact _renderSharedImageReport(
+  _ReportRenderRequest document,
+) {
+  final displayLines = <_ImageLine>[
+    _ImageLine(document.title, heading: true),
+    for (final section in document.sections) ...[
+      const _ImageLine(''),
+      _ImageLine(section.heading, heading: true),
+      for (final line in section.lines)
+        for (final wrapped in _wrap(line, 92)) _ImageLine(wrapped),
+    ],
+  ];
+  final photos = <(_ReportPhoto, img.Image?)>[];
+  for (final capture in document.captures) {
+    final photo = _readReducedPhoto(capture, maxDimension: 320);
+    photos.add((capture, photo));
+  }
+  final photoHeight = ((photos.length + 2) ~/ 3) * 340;
+  final image = img.Image(
+    width: 1200,
+    height: 64 + displayLines.length * 30 + photoHeight,
+  );
+  img.fill(image, color: img.ColorRgb8(248, 250, 252));
+  var y = 30;
+  for (final line in displayLines) {
+    img.drawString(
+      image,
+      line.text,
+      font: line.heading ? img.arial24 : img.arial14,
+      x: 36,
+      y: y,
+      color: line.text == 'VOIDED'
+          ? img.ColorRgb8(185, 28, 28)
+          : img.ColorRgb8(13, 38, 61),
+    );
+    y += 30;
+    if (line.heading && line.text == 'Photos') {
+      for (final (index, slot) in photos.indexed) {
+        final (capture, photo) = slot;
+        final x = 36 + (index % 3) * 380;
+        final top = y + (index ~/ 3) * 340;
+        img.drawString(
+          image,
+          'Photo ${capture.id}',
+          font: img.arial14,
+          x: x,
+          y: top,
+        );
+        if (photo != null) {
+          img.compositeImage(image, photo, dstX: x, dstY: top + 24);
+        } else {
+          img.drawString(
+            image,
+            'Image unavailable on this device',
+            font: img.arial14,
+            x: x,
+            y: top + 32,
+          );
+        }
+      }
+      y += photoHeight;
+    }
+  }
+  return AssessmentReportArtifact(
+    revisionId: document.revisionId,
+    canonicalText: document.canonicalText,
+    mimeType: 'image/png',
+    bytes: Uint8List.fromList(img.encodePng(image)),
+  );
+}
+
+List<String> _wrap(String value, int width) {
+  if (value.length <= width) return [value];
+  final output = <String>[];
+  var current = '';
+  for (final word in value.split(' ')) {
+    if (current.isEmpty) {
+      current = word;
+    } else if (current.length + word.length + 1 <= width) {
+      current = '$current $word';
+    } else {
+      output.add(current);
+      current = word;
+    }
+  }
+  if (current.isNotEmpty) output.add(current);
+  return output;
+}
+
+img.Image? _readReducedPhoto(
+  _ReportPhoto capture, {
+  required int maxDimension,
+}) {
   try {
     final file = File(capture.localPath);
     if (!file.existsSync()) return null;
@@ -471,4 +490,32 @@ class _ImageLine {
 
   final String text;
   final bool heading;
+}
+
+// Only immutable report text and photo paths cross the isolate boundary. No UI,
+// repository, plugin, open file, or decoded image objects enter the worker.
+typedef _ReportPhoto = ({String id, String localPath});
+typedef _ReportSection = ({String heading, List<String> lines});
+
+class _ReportRenderRequest {
+  _ReportRenderRequest.fromDocument(AssessmentReportDocument document)
+    : revisionId = document.revisionId,
+      revisionNumber = document.revisionNumber,
+      title = document.title,
+      canonicalText = document.canonicalText,
+      captures = [
+        for (final capture in document.captures)
+          (id: capture.id, localPath: capture.localPath),
+      ],
+      sections = [
+        for (final section in document.sections)
+          (heading: section.heading, lines: List<String>.of(section.lines)),
+      ];
+
+  final String revisionId;
+  final int revisionNumber;
+  final String title;
+  final String canonicalText;
+  final List<_ReportPhoto> captures;
+  final List<_ReportSection> sections;
 }

@@ -127,11 +127,16 @@ class ImagePickerEvidenceAcquisitionService
           'The selected image could not be read.',
         );
       }
+      final orientation = await compute(
+        _orientationOf,
+        bytes,
+        debugLabel: 'evidence_orientation',
+      );
       return EvidenceAcquired(
         AcquiredEvidence(
           bytes: bytes,
           source: source,
-          orientation: _orientationOf(bytes),
+          orientation: orientation,
           capturedAt: _now().toUtc(),
           fileExtension: _safeExtension(selected.path),
         ),

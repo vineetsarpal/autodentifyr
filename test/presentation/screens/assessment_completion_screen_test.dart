@@ -37,7 +37,11 @@ void main() {
     );
     await tester.drag(find.byType(ListView), const Offset(0, -180));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('render-pdf-report')));
+    await _renderReport(
+      tester,
+      'render-pdf-report',
+      () => delivery.prepared != null,
+    );
     await tester.pumpAndSettle();
     ScaffoldMessenger.of(
       tester.element(find.byType(AssessmentCompletionScreen)),
@@ -101,7 +105,11 @@ void main() {
     );
     await tester.drag(find.byType(ListView), const Offset(0, -180));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('render-shared-image-report')));
+    await _renderReport(
+      tester,
+      'render-shared-image-report',
+      () => delivery.prepared != null,
+    );
     await tester.pumpAndSettle();
     ScaffoldMessenger.of(
       tester.element(find.byType(AssessmentCompletionScreen)),
@@ -237,7 +245,11 @@ void main() {
       find.byKey(const Key('render-pdf-report')),
       400,
     );
-    await tester.tap(find.byKey(const Key('render-pdf-report')));
+    await _renderReport(
+      tester,
+      'render-pdf-report',
+      () => artifacts.length == 1,
+    );
     await tester.pumpAndSettle();
     ScaffoldMessenger.of(
       tester.element(find.byType(AssessmentCompletionScreen)),
@@ -247,7 +259,11 @@ void main() {
       find.byKey(const Key('render-shared-image-report')),
       200,
     );
-    await tester.tap(find.byKey(const Key('render-shared-image-report')));
+    await _renderReport(
+      tester,
+      'render-shared-image-report',
+      () => artifacts.length == 2,
+    );
     await tester.pumpAndSettle();
 
     expect(artifacts, hasLength(2));
@@ -514,4 +530,19 @@ class _FakeReportDelivery implements AssessmentReportDelivery {
     if (failShare) throw StateError('Share UI unavailable');
     return nextResult;
   }
+}
+
+// Real isolate futures need real async time rather than widget fake-time pumps.
+Future<void> _renderReport(
+  WidgetTester tester,
+  String buttonKey,
+  bool Function() completed,
+) async {
+  await tester.runAsync(() async {
+    await tester.tap(find.byKey(Key(buttonKey)));
+    await Future.doWhile(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      return !completed();
+    }).timeout(const Duration(seconds: 10));
+  });
 }
