@@ -112,3 +112,21 @@ We welcome contributions to AutoDentifyr!
 
 ---
 *Disclaimer: Price estimates provided by the app are static placeholders for demonstration purposes and should be verified by a certified automotive professional.*
+
+### Region and future local currency pricing
+
+Open **Region & currency** using the globe button on the home screen. The app
+suggests a country from the device locale's region (not its language). Select a
+supported country to save a device-local preference, or choose **Use device
+region** to remove the override. A missing or unsupported region remains
+unresolved; the app does not assume USD. Country defaults are maintained in
+`lib/core/localization/region_catalog.dart` and currently cover 94 countries and
+regions; countries with multiple circulating currencies have one default.
+
+This feature does not request GPS permission, look up an IP address, track
+coordinates, or send location data to a server. The preference supplies an ISO
+country code and currency code for future pricing. It does not establish physical
+location, confirm a Repair Shop's Pricing Context, or convert existing amounts.
+Quick-detection placeholders and existing assessment/report currencies retain
+their current behavior. Future local pricing must use supported regional pricing
+evidence or explicit conversion with currency-aware formatting and rounding.

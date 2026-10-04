@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:autodentifyr/core/theme/app_palette.dart';
@@ -6,9 +8,51 @@ import 'package:autodentifyr/presentation/screens/camera_inference_screen.dart';
 import 'package:autodentifyr/presentation/screens/single_image_screen.dart';
 import 'package:autodentifyr/presentation/controllers/assessment_workflow_composition.dart';
 
+import 'package:autodentifyr/presentation/controllers/region_preference_controller.dart';
+import 'package:autodentifyr/presentation/screens/region_settings_screen.dart';
+import 'package:autodentifyr/services/region_preference_store.dart';
+
 /// Home screen that presents mode selection after login
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  late final RegionPreferenceController _regionController;
+
+  @override
+  void initState() {
+    super.initState();
+    _regionController = RegionPreferenceController(
+      store: FileRegionPreferenceStore(),
+      deviceLocale: () => WidgetsBinding.instance.platformDispatcher.locale,
+    );
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_regionController.load());
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    unawaited(_regionController.load());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _regionController.dispose();
+    super.dispose();
+  }
+
+  void _openRegionSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RegionSettingsScreen(controller: _regionController),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +64,11 @@ class HomeScreen extends StatelessWidget {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: 'Region & currency',
+            onPressed: _openRegionSettings,
+            icon: const Icon(Icons.public),
+          ),
           IconButton(
             onPressed: () =>
                 context.read<AuthBloc>().add(AuthLogoutRequested()),
@@ -124,7 +173,25 @@ class HomeScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      ListenableBuilder(
+                        listenable: _regionController,
+                        builder: (context, _) {
+                          final region = _regionController.region;
+                          return TextButton.icon(
+                            onPressed: _openRegionSettings,
+                            icon: const Icon(Icons.public),
+                            label: Text(
+                              _regionController.error != null
+                                  ? 'Region unavailable · Choose country'
+                                  : region == null
+                                  ? 'Choose your region & currency'
+                                  : '${region.name} · ${region.currencyCode}',
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
