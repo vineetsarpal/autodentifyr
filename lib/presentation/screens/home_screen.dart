@@ -67,25 +67,6 @@ class HomeScreen extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(height: 40),
-                      const _SectionLabel('PROFESSIONAL WORKFLOW'),
-                      const SizedBox(height: 12),
-                      _ModeCard(
-                        icon: Icons.assignment_outlined,
-                        title: 'Assessment Workspace',
-                        description:
-                            'Create and manage documented vehicle intake assessments',
-                        supportingText: 'Saved • Reviewable • Reportable',
-                        isPrimary: true,
-                        onTap: () async {
-                          final screen = await openAssessmentWorkflowScreen();
-                          if (!context.mounted) return;
-                          await Navigator.of(
-                            context,
-                          ).push(MaterialPageRoute(builder: (_) => screen));
-                        },
-                      ),
-
-                      const SizedBox(height: 32),
                       const _SectionLabel('QUICK DETECTION'),
                       const SizedBox(height: 12),
                       IntrinsicHeight(
@@ -111,7 +92,6 @@ class HomeScreen extends StatelessWidget {
                               child: _ModeCard(
                                 icon: Icons.videocam_outlined,
                                 title: 'Live Detection',
-                                showBetaTag: true,
                                 description:
                                     'Preview damage detection in real time',
                                 onTap: () => Navigator.of(context).push(
@@ -124,6 +104,25 @@ class HomeScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 32),
+                      const _SectionLabel('PROFESSIONAL WORKFLOW'),
+                      const SizedBox(height: 12),
+                      _ModeCard(
+                        icon: Icons.assignment_outlined,
+                        title: 'Assessment Workspace',
+                        description:
+                            'Create and manage documented vehicle intake assessments',
+                        supportingText: 'Saved • Reviewable • Reportable',
+                        isPrimary: true,
+                        showBetaTag: true,
+                        onTap: () async {
+                          final screen = await openAssessmentWorkflowScreen();
+                          if (!context.mounted) return;
+                          await Navigator.of(
+                            context,
+                          ).push(MaterialPageRoute(builder: (_) => screen));
+                        },
                       ),
                       const SizedBox(height: 32),
                     ],
@@ -188,14 +187,10 @@ class _ModeCard extends StatelessWidget {
         width: double.infinity,
         padding: EdgeInsets.all(isPrimary ? 24 : 16),
         decoration: BoxDecoration(
-          color: isPrimary
-              ? AppPalette.appGreen.withValues(alpha: 0.18)
-              : AppPalette.whiteColor.withValues(alpha: 0.08),
+          color: AppPalette.whiteColor.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: AppPalette.appGreen.withValues(
-              alpha: isPrimary ? 0.75 : 0.28,
-            ),
+            color: AppPalette.appGreen.withValues(alpha: 0.28),
             width: 2,
           ),
         ),

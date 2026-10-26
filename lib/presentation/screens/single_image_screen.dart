@@ -14,6 +14,7 @@ import 'package:autodentifyr/core/theme/app_palette.dart';
 import 'package:autodentifyr/services/model_manager.dart';
 import 'package:autodentifyr/models/models.dart';
 import 'package:autodentifyr/presentation/widgets/estimate_disclaimer_icon.dart';
+import 'package:autodentifyr/presentation/widgets/photo_detections_button.dart';
 
 /// A screen for analyzing damage from uploaded images
 class SingleImageScreen extends StatefulWidget {
@@ -107,10 +108,8 @@ class _SingleImageScreenState extends State<SingleImageScreen> {
           debugPrint('First detection: ${detections.first}');
         }
 
-        // Use YOLO's annotated image to preserve default bounding box colors
+        // Preserve Ultralytics boxes, class labels, and confidence values.
         final baseImage = result['annotatedImage'] as Uint8List? ?? bytes;
-
-        // Process image with price annotations for preview (clean view)
         final previewBytes = await compute(
           _processImageWithAnnotations,
           _ImageProcessingRequest(
@@ -278,7 +277,6 @@ class _SingleImageScreenState extends State<SingleImageScreen> {
 
   Widget _buildImageView() {
     final totalPrice = _calculateTotalPrice();
-    final detectionCount = _detections.length;
 
     return RepaintBoundary(
       key: _screenshotKey,
@@ -293,10 +291,22 @@ class _SingleImageScreenState extends State<SingleImageScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildStatItem(
-                    icon: Icons.warning_amber_rounded,
-                    label: 'Detections',
-                    value: detectionCount.toString(),
+                  PhotoDetectionsButton(
+                    detections: _detections.map((detection) {
+                      final rawName =
+                          (detection['className'] as String?)?.toLowerCase() ??
+                          'unknown';
+                      final name = rawName
+                          .replaceAll('doorouter', 'door outer')
+                          .replaceAll('quaterpanel', 'quarter panel')
+                          .replaceAll('-', ' ');
+                      return (
+                        name: name[0].toUpperCase() + name.substring(1),
+                        confidence: (detection['confidence'] as num?)
+                            ?.toDouble(),
+                        estimate: _priceMap[rawName],
+                      );
+                    }).toList(),
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -430,79 +440,80 @@ class _ImageProcessingRequest {
   _ImageProcessingRequest({required this.imageBytes, required this.detections});
 }
 
-/// Process image with annotations in isolate
+/// Add costs and matching numbers without replacing Ultralytics annotations.
 Future<Uint8List> _processImageWithAnnotations(
   _ImageProcessingRequest request,
 ) async {
   final image = img.decodeImage(request.imageBytes);
   if (image == null) return request.imageBytes;
 
-  // Price estimation mapping
-  const priceMap = {
-    'front-windscreen-damage': 650.0,
-    'headlight-damage': 350.0,
-    'rear-windscreen-damage': 550.0,
-    'runningboard-damage': 400.0,
-    'sidemirror-damage': 250.0,
-    'taillight-damage': 300.0,
-    'bonnet-dent': 450.0,
-    'boot-dent': 450.0,
-    'doorouter-dent': 500.0,
-    'fender-dent': 350.0,
-    'front-bumper-dent': 400.0,
-    'quaterpanel-dent': 550.0,
-    'rear-bumper-dent': 400.0,
-    'roof-dent': 750.0,
-  };
+  final oriented = img.bakeOrientation(image);
+  final font = oriented.width > 1500 ? img.arial48 : img.arial24;
+  final badgeHeight = font.lineHeight + 8;
+  final color = img.ColorRgb8(0, 220, 180);
 
-  // Resolution-aware scaling
-  // Base scaling on a reference width of 1000px
-  final double scale = image.width / 1000.0;
-  final font = scale > 1.5 ? img.arial48 : img.arial24;
-
-  // Draw price tags for each detection
-  for (final detection in request.detections) {
-    final className = (detection['className'] as String?)?.toLowerCase() ?? '';
-    final price = priceMap[className] ?? 250.0;
-
-    // Extract normalized coordinates
-    final x1Norm = (detection['x1_norm'] as num?)?.toDouble();
-    final y1Norm = (detection['y1_norm'] as num?)?.toDouble();
-
-    if (x1Norm == null || y1Norm == null) {
+  for (var index = 0; index < request.detections.length; index++) {
+    final detection = request.detections[index];
+    final box = detection['normalizedBox'] is Map
+        ? detection['normalizedBox'] as Map
+        : detection;
+    final left = (box['left'] ?? box['x1_norm']) as num?;
+    final top = (box['top'] ?? box['y1_norm']) as num?;
+    final bottom = (box['bottom'] ?? box['y2_norm']) as num?;
+    if (left == null || top == null || bottom == null) {
       continue;
     }
 
-    // Convert to pixel positions
-    final x1 = (x1Norm * image.width).toInt();
-    final y1 = (y1Norm * image.height).toInt();
-
-    // Draw price label (yellow background, black text)
+    final x1 = (left.clamp(0, 1) * (oriented.width - 1)).round();
+    final y1 = (top.clamp(0, 1) * (oriented.height - 1)).round();
+    final y2 = (bottom.clamp(0, 1) * (oriented.height - 1)).round();
+    final className = (detection['className'] as String?)?.toLowerCase() ?? '';
+    final price = _SingleImageScreenState._priceMap[className] ?? 250.0;
     final priceText = '\$${price.toStringAsFixed(0)}';
-
-    // Calculate label dimensions based on font
-    final labelWidth = (priceText.length * (scale > 1.5 ? 24 : 12) + 20 * scale)
-        .toInt();
-    final labelHeight = (scale > 1.5 ? 60 : 30).toInt();
-
+    final priceWidth = priceText.length * (font.size ~/ 2 + 4) + 12;
     img.fillRect(
-      image,
+      oriented,
       x1: x1,
       y1: y1,
-      x2: x1 + labelWidth,
-      y2: y1 + labelHeight,
-      color: img.ColorRgb8(255, 255, 0), // Bright Yellow
+      x2: x1 + priceWidth,
+      y2: y1 + badgeHeight,
+      color: img.ColorRgb8(255, 255, 0),
     );
-
     img.drawString(
-      image,
+      oriented,
       priceText,
       font: font,
-      x: (x1 + 10 * scale).toInt(),
-      y: (y1 + 5 * scale).toInt(),
-      color: img.ColorRgb8(0, 0, 0), // Black
+      x: x1 + 6,
+      y: y1 + 4,
+      color: img.ColorRgb8(0, 0, 0),
+    );
+    final number = '${index + 1}';
+    final badgeWidth = number.length * (font.size ~/ 2 + 4) + 12;
+    final badgeX = x1.clamp(
+      0,
+      (oriented.width - badgeWidth).clamp(0, oriented.width),
+    );
+    final badgeY = (y2 - badgeHeight).clamp(
+      0,
+      (oriented.height - badgeHeight).clamp(0, oriented.height),
+    );
+    img.fillRect(
+      oriented,
+      x1: badgeX,
+      y1: badgeY,
+      x2: badgeX + badgeWidth,
+      y2: badgeY + badgeHeight,
+      color: color,
+    );
+    img.drawString(
+      oriented,
+      number,
+      font: font,
+      x: badgeX + 6,
+      y: badgeY + 4,
+      color: img.ColorRgb8(0, 0, 0),
     );
   }
 
-  return Uint8List.fromList(img.encodePng(image));
+  return Uint8List.fromList(img.encodePng(oriented));
 }
